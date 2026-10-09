@@ -17,7 +17,7 @@
 //       { id, type: 'VIN', nodes: [p, m],    R },          // audio input, source resistance R
 //       { id, type: 'D',   nodes: [a, k],    model: { Is, n } },
 //       { id, type: 'Q',   nodes: [c, b, e], model: { Is, bf, br, pol } }, // pol +1 NPN, -1 PNP
-//       { id, type: 'OA',  nodes: [p, n, o], model: { A, vmid, vsat } },
+//       { id, type: 'OA',  nodes: [p, n, o], model: { A, gbw, slew, vmid, vsat } },
 //   ] }
 
 export const VT = 0.025852; // thermal voltage at ~27 °C
@@ -205,8 +205,14 @@ export class Circuit {
           break;
         }
         case 'OA': {
-          const { A = 1e5, vmid = 4.5, vsat = 4 } = e.model || {};
-          this.opamps.push({ p: nd[0], n: nd[1], o: nd[2], A, vmid, vsat, row: extra++ });
+          // Macro-model: a saturating transconductance (slew limit) charges an
+          // internal integrator node z (dominant pole -> gain-bandwidth), and
+          // the output follows z through a soft rail clip.
+          const { A = 1e5, gbw = 1e6, slew = 1e6, vmid = 4.5, vsat = 3.5 } = e.model || {};
+          const z = extra++;
+          const Cz = A / (2 * Math.PI * gbw); // with a 1 ohm load on z
+          this.caps.push({ a: z, b: -1, C: Cz, v: 0, i: 0 });
+          this.opamps.push({ p: nd[0], n: nd[1], o: nd[2], z, gm: A, imax: slew * Cz, vmid, vsat, row: extra++ });
           break;
         }
         default: throw new Error('Unknown element type ' + e.type);
@@ -252,6 +258,7 @@ export class Circuit {
       add(v.row, v.p, 1); add(v.row, v.m, -1);
     }
     for (const o of this.opamps) {
+      add(o.z, o.z, 1);
       add(o.o, o.row, 1);
       add(o.row, o.o, 1);
     }
@@ -260,7 +267,7 @@ export class Circuit {
   // One Newton solve of the full nonlinear system. rhs is the constant
   // right-hand side (sources + capacitor history). Returns true if converged.
   _newton(rhs, maxIter, srcScale = 1) {
-    const { n, N, A, b, base, x, xOld } = this;
+    const { n, A, b, base, x, xOld } = this;
     for (let it = 0; it < maxIter; it++) {
       A.set(base);
       b.set(rhs);
@@ -271,7 +278,7 @@ export class Circuit {
       this.stats.iterations++;
       if (!this.nonlinear) return true;
       let ok = true;
-      for (let i = 0; i < N; i++) {
+      for (let i = 0; i < n; i++) {
         const d = Math.abs(x[i] - xOld[i]);
         if (d > 1e-7 + 1e-6 * Math.abs(x[i])) { ok = false; break; }
       }
@@ -325,13 +332,18 @@ export class Circuit {
     }
 
     for (const o of this.opamps) {
+      // transconductance into z: i = imax * tanh(gm * vd / imax)
       const vd = V(o.p) - V(o.n);
-      const vmid = o.vmid * srcScale;
-      const t = Math.tanh(o.A * vd / o.vsat);
-      const f = vmid + o.vsat * t;
-      const g = o.A * (1 - t * t) + 1e-9;
-      add(o.row, o.p, -g); add(o.row, o.n, g);
-      b[o.row] += f - g * vd;
+      const ti = Math.tanh(o.gm * vd / o.imax);
+      const gi = o.gm * (1 - ti * ti) + 1e-9;
+      add(o.z, o.p, -gi); add(o.z, o.n, gi);
+      b[o.z] += o.imax * ti - gi * vd;
+      // output: vo = vmid + vsat * tanh(vz / vsat)
+      const vz = x[o.z];
+      const t = Math.tanh(vz / o.vsat);
+      const g = 1 - t * t + 1e-12;
+      add(o.row, o.z, -g);
+      b[o.row] += o.vmid * srcScale + o.vsat * t - g * vz;
     }
   }
 
@@ -441,9 +453,11 @@ export class Circuit {
       addG(q.e, q.b, -(gcbe + gcbc + gbbe + gbbc)); addG(q.e, q.e, gcbe + gbbe); addG(q.e, q.c, gcbc + gbbc);
     }
     for (const o of this.opamps) {
-      const t = Math.tanh(o.A * (V(o.p) - V(o.n)) / o.vsat);
-      const g = o.A * (1 - t * t) + 1e-9;
-      addG(o.row, o.p, -g); addG(o.row, o.n, g);
+      const ti = Math.tanh(o.gm * (V(o.p) - V(o.n)) / o.imax);
+      const gi = o.gm * (1 - ti * ti) + 1e-9;
+      addG(o.z, o.p, -gi); addG(o.z, o.n, gi);
+      const t = Math.tanh(x[o.z] / o.vsat);
+      addG(o.row, o.z, -(1 - t * t + 1e-12));
     }
     const mag = new Float64Array(freqs.length), phase = new Float64Array(freqs.length);
     const Ar = new Float64Array(n * n), Ai = new Float64Array(n * n);
