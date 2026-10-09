@@ -35,11 +35,31 @@ export const BJT_MODELS = {
   'Ge': { label: 'Germanium NPN', Is: 2.0e-6, br: 2, pol: 1 },
 };
 
+export const OPAMP_MODELS = {
+  'JRC4558': { label: 'JRC4558 (Tube Screamer)', gbw: 3e6, slew: 1e6 },
+  'TL072': { label: 'TL072 (fast, clean)', gbw: 3e6, slew: 13e6 },
+  'LM308': { label: 'LM308 (RAT, slow)', gbw: 0.5e6, slew: 0.3e6 },
+  'OP07': { label: 'OP07 (slow precision)', gbw: 0.6e6, slew: 0.3e6 },
+  'LM741': { label: 'µA741 (vintage)', gbw: 1e6, slew: 0.5e6 },
+};
+
 const GMIN = 1e-12;
 const MAX_EXP = 80;
 
 function safeExp(x) {
   return x > MAX_EXP ? Math.exp(MAX_EXP) * (1 + x - MAX_EXP) : Math.exp(x);
+}
+
+// Current and conductance of the op-amp rail clamp at internal voltage v:
+// G * (softplus(k(v - lim)) - softplus(-k(v + lim))) / k
+const CLAMP_G = 1e3, CLAMP_K = 8;
+function railClamp(v, lim) {
+  const sp = (u) => (u > 30 ? u : Math.log1p(Math.exp(u)));
+  const sg = (u) => 1 / (1 + Math.exp(-u));
+  const a = CLAMP_K * (v - lim), b = -CLAMP_K * (v + lim);
+  const i = CLAMP_G * (sp(a) - sp(b)) / CLAMP_K;
+  const g = CLAMP_G * (sg(a) + sg(b)) + 1e-12;
+  return [i, g];
 }
 
 // SPICE-style junction voltage limiting: stops Newton from jumping to a
@@ -86,6 +106,81 @@ function luSolve(A, b, n) {
     b[i] = s / A[i * n + i];
   }
   return true;
+}
+
+// Sparse LU with a fixed pivot order. The circuit's matrix has the same
+// structure every time step, so we pick the row order once (by partial
+// pivoting on a real Jacobian), work out where fill-in appears, and keep a
+// list of exactly which entries each elimination step touches. Per solve this
+// is several times cheaper than dense elimination.
+class SparseLU {
+  constructor(A, pattern, n) {
+    this.n = n;
+    // choose row permutation from a dense pivoted factorisation
+    const M = Float64Array.from(A);
+    const perm = Int32Array.from({ length: n }, (_, i) => i);
+    for (let k = 0; k < n; k++) {
+      let p = k, max = Math.abs(M[k * n + k]);
+      for (let i = k + 1; i < n; i++) { const v = Math.abs(M[i * n + k]); if (v > max) { max = v; p = i; } }
+      if (p !== k) {
+        for (let j = 0; j < n; j++) { const t = M[k * n + j]; M[k * n + j] = M[p * n + j]; M[p * n + j] = t; }
+        const t = perm[k]; perm[k] = perm[p]; perm[p] = t;
+      }
+      const piv = M[k * n + k];
+      if (piv === 0) continue;
+      for (let i = k + 1; i < n; i++) {
+        const f = M[i * n + k] / piv;
+        if (f) for (let j = k; j < n; j++) M[i * n + j] -= f * M[k * n + j];
+      }
+    }
+    this.perm = perm;
+    // symbolic factorisation on the permuted pattern
+    const P = new Uint8Array(n * n);
+    for (let r = 0; r < n; r++) for (let j = 0; j < n; j++) P[r * n + j] = pattern[perm[r] * n + j];
+    for (let k = 0; k < n; k++) P[k * n + k] = 1;
+    this.rows = []; this.cols = [];
+    for (let k = 0; k < n; k++) {
+      const rows = [], cols = [];
+      for (let i = k + 1; i < n; i++) if (P[i * n + k]) rows.push(i);
+      for (let j = k + 1; j < n; j++) if (P[k * n + j]) cols.push(j);
+      for (const i of rows) for (const j of cols) P[i * n + j] = 1;
+      this.rows.push(Int32Array.from(rows));
+      this.cols.push(Int32Array.from(cols));
+    }
+    this.M = new Float64Array(n * n);
+    this.y = new Float64Array(n);
+  }
+
+  // Solve A x = b; result written into b. Returns false on a bad pivot.
+  solve(A, b) {
+    const { n, M, y, perm, rows, cols } = this;
+    for (let r = 0; r < n; r++) {
+      const src = perm[r] * n, dst = r * n;
+      for (let j = 0; j < n; j++) M[dst + j] = A[src + j];
+      y[r] = b[perm[r]];
+    }
+    for (let k = 0; k < n; k++) {
+      const piv = M[k * n + k];
+      if (!(Math.abs(piv) > 1e-280)) return false;
+      const R = rows[k], C = cols[k], kn = k * n;
+      for (let a = 0; a < R.length; a++) {
+        const i = R[a], in_ = i * n;
+        const f = M[in_ + k] / piv;
+        if (f === 0) continue;
+        for (let c = 0; c < C.length; c++) { const j = C[c]; M[in_ + j] -= f * M[kn + j]; }
+        y[i] -= f * y[k];
+      }
+    }
+    for (let k = n - 1; k >= 0; k--) {
+      let sum = y[k];
+      const C = cols[k], kn = k * n;
+      for (let c = 0; c < C.length; c++) { const j = C[c]; sum -= M[kn + j] * y[j]; }
+      y[k] = sum / M[kn + k];
+      if (!Number.isFinite(y[k])) return false;
+    }
+    b.set(y);
+    return true;
+  }
 }
 
 // Complex LU solve, separate real/imag arrays. Solution in (br, bi).
@@ -152,6 +247,7 @@ export class Circuit {
   constructor(net, fs, opts = {}) {
     this.fs = fs;
     this.method = opts.method || 'trap';
+    this.abstol = opts.abstol ?? 1e-5;
     this.stats = { steps: 0, iterations: 0, failures: 0 };
     this._build(net);
     this.dcOperatingPoint();
@@ -206,12 +302,13 @@ export class Circuit {
         }
         case 'OA': {
           // Macro-model: a saturating transconductance (slew limit) charges an
-          // internal integrator node z (dominant pole -> gain-bandwidth), and
-          // the output follows z through a soft rail clip.
+          // internal integrator node z (dominant pole -> gain-bandwidth). z is
+          // clamped near the rails (no integrator wind-up) and the output
+          // follows it: vo = vmid + vz.
           const { A = 1e5, gbw = 1e6, slew = 1e6, vmid = 4.5, vsat = 3.5 } = e.model || {};
           const z = extra++;
           const Cz = A / (2 * Math.PI * gbw); // with a 1 ohm load on z
-          this.caps.push({ a: z, b: -1, C: Cz, v: 0, i: 0 });
+          this.caps.push({ a: z, b: -1, C: Cz, v: 0, i: 0, be: true });
           this.opamps.push({ p: nd[0], n: nd[1], o: nd[2], z, gm: A, imax: slew * Cz, vmid, vsat, row: extra++ });
           break;
         }
@@ -233,6 +330,7 @@ export class Circuit {
     this.base = new Float64Array(n * n);
     this.xOld = new Float64Array(n);
     this.nonlinear = this.diodes.length + this.bjts.length + this.opamps.length > 0;
+    this.sparse = null;
     this._oldCaps = this.caps;
     this._stampLinear(false);
   }
@@ -247,9 +345,9 @@ export class Circuit {
     const cond = (a, b, g) => { add(a, a, g); add(b, b, g); add(a, b, -g); add(b, a, -g); };
     for (let i = 0; i < N; i++) A[i * n + i] += GMIN;
     for (const r of this.res) cond(r.a, r.b, r.g);
-    const k = this.method === 'be' ? 1 : 2;
+    const trap = this.method !== 'be';
     for (const c of this.caps) {
-      c.geq = dc ? 0 : k * c.C * this.fs;
+      c.geq = dc ? 0 : (trap && !c.be ? 2 : 1) * c.C * this.fs;
       if (!dc) cond(c.a, c.b, c.geq);
     }
     if (this.input) cond(this.input.p, this.input.m, this.input.g);
@@ -273,18 +371,47 @@ export class Circuit {
       b.set(rhs);
       this._stampNonlinear(A, b, n, srcScale);
       xOld.set(x);
-      if (!luSolve(A, b, n)) return false;
-      x.set(b);
+      if (!this._solve(A, b, n)) return false;
+      // Damped steps once plain Newton has had its chance: stops it bouncing
+      // between two states when an op-amp sits right at a rail.
+      const damp = 1;
+      for (let i = 0; i < n; i++) x[i] = xOld[i] + damp * (b[i] - xOld[i]);
       this.stats.iterations++;
       if (!this.nonlinear) return true;
       let ok = true;
       for (let i = 0; i < n; i++) {
-        const d = Math.abs(x[i] - xOld[i]);
-        if (d > 1e-7 + 1e-6 * Math.abs(x[i])) { ok = false; break; }
+        const d = Math.abs(b[i] - xOld[i]);
+        if (d > this.abstol + 1e-4 * Math.abs(b[i])) { ok = false; break; }
       }
-      if (ok) return true;
+      if (ok) { x.set(b); return true; }
     }
     return false;
+  }
+
+  _solve(A, b, n) {
+    if (!this.sparse) this.sparse = new SparseLU(A, this._pattern(), n);
+    // SparseLU works on its own copy, so A and b are intact if it fails
+    if (this.sparse.solve(A, b)) return true;
+    // pivot went bad at this operating point: re-pick the order next time
+    this.sparse = null;
+    return luSolve(A, b, n);
+  }
+
+  // Every matrix entry that can ever be non-zero.
+  _pattern() {
+    const n = this.n, P = new Uint8Array(n * n);
+    for (let i = 0; i < n * n; i++) if (this.base[i] !== 0) P[i] = 1;
+    for (let i = 0; i < n; i++) P[i * n + i] = 1;
+    const mark = (list) => { for (const i of list) for (const j of list) if (i >= 0 && j >= 0) P[i * n + j] = 1; };
+    for (const c of this.caps) mark([c.a, c.b]);
+    for (const d of this.diodes) mark([d.a, d.k]);
+    for (const q of this.bjts) mark([q.c, q.b, q.e]);
+    for (const o of this.opamps) {
+      for (const j of [o.p, o.n, o.z]) if (j >= 0) P[o.z * n + j] = 1;
+      for (const j of [o.z, o.o]) if (j >= 0) P[o.row * n + j] = 1;
+      if (o.o >= 0) P[o.o * n + o.row] = 1;
+    }
+    return P;
   }
 
   _stampNonlinear(A, b, n, srcScale) {
@@ -338,12 +465,17 @@ export class Circuit {
       const gi = o.gm * (1 - ti * ti) + 1e-9;
       add(o.z, o.p, -gi); add(o.z, o.n, gi);
       b[o.z] += o.imax * ti - gi * vd;
-      // output: vo = vmid + vsat * tanh(vz / vsat)
-      const vz = x[o.z];
-      const t = Math.tanh(vz / o.vsat);
-      const g = 1 - t * t + 1e-12;
-      add(o.row, o.z, -g);
-      b[o.row] += o.vmid * srcScale + o.vsat * t - g * vz;
+      // rail clamp on z: smooth, exponentially small inside the rails.
+      // Limit how far z moves per iteration (like pnjlim for junctions).
+      let vz = x[o.z];
+      if (o.vzl !== undefined && Math.abs(vz - o.vzl) > 1) vz = o.vzl + Math.sign(vz - o.vzl);
+      o.vzl = vz;
+      const [ic, gc] = railClamp(vz, o.vsat);
+      add(o.z, o.z, gc);
+      b[o.z] -= ic - gc * vz;
+      // output: vo = vmid + vz
+      add(o.row, o.z, -1);
+      b[o.row] += o.vmid * srcScale;
     }
   }
 
@@ -358,7 +490,7 @@ export class Circuit {
     if (!dc) {
       const trap = this.method !== 'be';
       for (const c of this.caps) {
-        const h = c.geq * c.v + (trap ? c.i : 0);
+        const h = c.geq * c.v + (trap && !c.be ? c.i : 0);
         if (c.a >= 0) rhs[c.a] += h;
         if (c.b >= 0) rhs[c.b] -= h;
       }
@@ -394,6 +526,45 @@ export class Circuit {
 
   /** Simulate one sample. vin in volts. Returns the output node voltage. */
   step(vin) {
+    this.stats.steps++;
+    const prev = this.vinPrev ?? vin;
+    if (!this._tryStep(vin, 25)) {
+      // Newton didn't converge: roll back and cross this sample in smaller
+      // time steps (input interpolated), like SPICE's timestep control.
+      this._restore();
+      if (!this._substep(prev, vin, 1)) this.stats.failures++;
+    }
+    this.vinPrev = vin;
+    const o = this.out;
+    return o >= 0 ? this.x[o] : 0;
+  }
+
+  _substep(v0, v1, depth) {
+    const fs = this.fs;
+    this.fs = fs * 2;
+    this._stampLinear(false);
+    let ok = true;
+    for (const vin of [(v0 + v1) / 2, v1]) {
+      if (!this._tryStep(vin, 25)) {
+        if (depth < 6) {
+          this._restore();
+          const from = vin === v1 ? (v0 + v1) / 2 : v0;
+          ok = this._substep(from, vin, depth + 1) && ok;
+        } else {
+          ok = false; // accept the best estimate and move on
+          this._commitCaps();
+        }
+      }
+    }
+    this.fs = fs;
+    this._stampLinear(false);
+    return ok;
+  }
+
+  // Save solver + capacitor state, then attempt one time step. On success the
+  // capacitors are advanced; on failure the caller can _restore().
+  _tryStep(vin, maxIter) {
+    this._save();
     const rhs = this._rhsBuf;
     rhs.fill(0);
     for (const v of this.vsrc) rhs[v.row] = v.V;
@@ -404,20 +575,47 @@ export class Circuit {
     }
     const trap = this.method !== 'be';
     for (const c of this.caps) {
-      const h = c.geq * c.v + (trap ? c.i : 0);
+      const h = c.geq * c.v + (trap && !c.be ? c.i : 0);
       if (c.a >= 0) rhs[c.a] += h;
       if (c.b >= 0) rhs[c.b] -= h;
     }
-    this.stats.steps++;
-    if (!this._newton(rhs, 40)) this.stats.failures++;
-    const x = this.x;
+    const ok = this._newton(rhs, maxIter);
+    if (ok) this._commitCaps();
+    return ok;
+  }
+
+  _commitCaps() {
+    const x = this.x, trap = this.method !== 'be';
     for (const c of this.caps) {
       const v = (c.a >= 0 ? x[c.a] : 0) - (c.b >= 0 ? x[c.b] : 0);
-      c.i = trap ? c.geq * (v - c.v) - c.i : c.geq * (v - c.v);
+      c.i = trap && !c.be ? c.geq * (v - c.v) - c.i : c.geq * (v - c.v);
       c.v = v;
     }
-    const o = this.out;
-    return o >= 0 ? x[o] : 0;
+  }
+
+  _save() {
+    const nj = this.diodes.length + 2 * this.bjts.length + this.opamps.length;
+    if (!this._saved || this._saved.x.length !== this.n || this._saved.cv.length !== this.caps.length || this._saved.j.length !== nj) {
+      this._saved = { x: new Float64Array(this.n), cv: new Float64Array(this.caps.length), ci: new Float64Array(this.caps.length), j: new Float64Array(nj) };
+    }
+    const s = this._saved;
+    s.x.set(this.x);
+    const caps = this.caps;
+    for (let i = 0; i < caps.length; i++) { s.cv[i] = caps[i].v; s.ci[i] = caps[i].i; }
+    let k = 0;
+    for (const d of this.diodes) s.j[k++] = d.vd;
+    for (const q of this.bjts) { s.j[k++] = q.vbe; s.j[k++] = q.vbc; }
+    for (const o of this.opamps) s.j[k++] = o.vzl ?? 0;
+  }
+
+  _restore() {
+    const s = this._saved;
+    this.x.set(s.x);
+    this.caps.forEach((c, i) => { c.v = s.cv[i]; c.i = s.ci[i]; });
+    let k = 0;
+    for (const d of this.diodes) d.vd = s.j[k++];
+    for (const q of this.bjts) { q.vbe = s.j[k++]; q.vbc = s.j[k++]; }
+    for (const o of this.opamps) o.vzl = s.j[k++];
   }
 
   /** Process a block of input samples (volts) into output (volts). */
@@ -456,8 +654,8 @@ export class Circuit {
       const ti = Math.tanh(o.gm * (V(o.p) - V(o.n)) / o.imax);
       const gi = o.gm * (1 - ti * ti) + 1e-9;
       addG(o.z, o.p, -gi); addG(o.z, o.n, gi);
-      const t = Math.tanh(x[o.z] / o.vsat);
-      addG(o.row, o.z, -(1 - t * t + 1e-12));
+      addG(o.z, o.z, railClamp(x[o.z], o.vsat)[1]);
+      addG(o.row, o.z, -1);
     }
     const mag = new Float64Array(freqs.length), phase = new Float64Array(freqs.length);
     const Ar = new Float64Array(n * n), Ai = new Float64Array(n * n);

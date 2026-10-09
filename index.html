@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pedal Schematics</title>
+  <meta name="description" content="Build guitar pedals from their schematics: change resistors, capacitors, diodes and transistors and hear the circuit simulated live.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@1,700;1,800&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='2' width='24' height='28' rx='4' fill='%231f6f4a'/%3E%3Ccircle cx='11' cy='10' r='4' fill='%23f2f2f2'/%3E%3Ccircle cx='21' cy='10' r='4' fill='%23f2f2f2'/%3E%3Ccircle cx='16' cy='23' r='3.5' fill='%23c9d1d5'/%3E%3C/svg%3E">
+</head>
+<body>
+  <header class="top">
+    <a class="wordmark" href="./">Pedal&nbsp;Schematics</a>
+    <nav class="pedal-tabs" id="tabs" role="tablist" aria-label="Pedal"></nav>
+  </header>
+
+  <main class="layout">
+    <section class="rig" aria-label="Pedal and audio">
+      <div class="enclosure" id="enclosure">
+        <div class="knobs" id="knobs"></div>
+        <div class="graphic">
+          <p class="pedal-name" id="pedalName"></p>
+          <p class="pedal-sub" id="pedalSub"></p>
+        </div>
+        <span class="led" id="led" aria-hidden="true"></span>
+        <button class="stomp" id="stomp" aria-pressed="true" aria-label="Effect on (tap to bypass)"></button>
+      </div>
+
+      <div class="transport">
+        <div class="play-row">
+          <button class="play" id="play" aria-pressed="false">Play</button>
+          <select id="source" aria-label="Input signal">
+            <option value="pentatonic">A minor pentatonic riff</option>
+            <option value="chords">Open chord strums</option>
+            <option value="single">Sustained low E</option>
+            <option value="mic">Guitar / microphone input</option>
+            <option value="file">Audio file…</option>
+          </select>
+          <input type="file" id="file" accept="audio/*" hidden>
+        </div>
+        <label class="fader">
+          <span>Pickup level</span>
+          <input type="range" id="inLevel" min="-30" max="12" step="0.5" value="-8">
+          <output id="inLevelOut"></output>
+        </label>
+        <label class="fader">
+          <span>Monitor</span>
+          <input type="range" id="outLevel" min="-40" max="6" step="0.5" value="-12">
+          <output id="outLevelOut"></output>
+        </label>
+        <div class="quality" role="radiogroup" aria-label="Simulation quality">
+          <span>Oversampling</span>
+          <label><input type="radio" name="os" value="1"> 1×</label>
+          <label><input type="radio" name="os" value="2" checked> 2×</label>
+        </div>
+        <p class="status" id="status" role="status"></p>
+      </div>
+    </section>
+
+    <section class="board" aria-label="Schematic">
+      <div class="board-head">
+        <p class="blurb" id="blurb"></p>
+        <div class="board-tools">
+          <button class="tool" id="zoomOut" aria-label="Zoom out">−</button>
+          <button class="tool" id="zoomFit">Fit</button>
+          <button class="tool" id="zoomIn" aria-label="Zoom in">+</button>
+        </div>
+      </div>
+      <div class="schematic-wrap" id="schematic"></div>
+      <div class="changes" id="changes"></div>
+    </section>
+
+    <section class="readouts" aria-label="Measurements">
+      <figure class="plot">
+        <figcaption><strong>Frequency response</strong> <span>Small-signal gain from input to output. Dashed line: stock parts.</span></figcaption>
+        <canvas id="bode" aria-label="Frequency response plot"></canvas>
+      </figure>
+      <figure class="plot">
+        <figcaption><strong>Scope</strong> <span id="scopeInfo">press Play to see the waveform</span></figcaption>
+        <canvas id="scope" aria-label="Oscilloscope of input and output"></canvas>
+      </figure>
+    </section>
+
+    <footer class="foot">
+      <button class="tool" id="share">Copy link to this build</button>
+      <button class="tool" id="spice">Export SPICE netlist</button>
+      <a href="https://github.com/soshmur/pedal-schematics">Source on GitHub</a>
+    </footer>
+  </main>
+
+  <aside class="editor" id="editor" aria-label="Component editor" hidden></aside>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

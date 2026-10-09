@@ -12,9 +12,9 @@ export const PEDALS = [
   {
     key: 'booster',
     name: 'Booster',
-    subtitle: 'LPB-1 style · one transistor',
+    subtitle: 'LPB-1 style, one transistor',
     blurb: 'A single common-emitter stage. Gain ≈ R3 / R4, the bias divider R1/R2 sets where the transistor sits. Shrink R4 for more gain, make C1 smaller to thin out the bass.',
-    color: '#c0392b',
+    color: '#b0322a',
     parts: [
       { id: 'IN', type: 'IN', x: 0, y: 8 },
       { id: 'C1', type: 'C', x: 2, y: 8, value: 100e-9 },
@@ -44,9 +44,9 @@ export const PEDALS = [
   {
     key: 'fuzz',
     name: 'Fuzz Face',
-    subtitle: 'two-transistor fuzz · 1966',
+    subtitle: 'Two-transistor fuzz, 1966',
     blurb: 'Two transistors in a feedback loop through R5. The Fuzz pot decides how much of R4’s emitter feedback C2 bypasses. The Bias trimmer sets Q2’s collector voltage — around 4.5 V is the classic starting point; starve it for a gated, sputtery fuzz.',
-    color: '#d35400',
+    color: '#2f5d9b',
     parts: [
       { id: 'IN', type: 'IN', x: 0, y: 10 },
       { id: 'C1', type: 'C', x: 2, y: 10, value: 2.2e-6, polar: true, plus: 1 },
@@ -85,14 +85,14 @@ export const PEDALS = [
   {
     key: 'screamer',
     name: 'Screamer',
-    subtitle: 'TS808 style · op-amp overdrive',
+    subtitle: 'TS808 style overdrive',
     blurb: 'A non-inverting op-amp with diodes in the feedback loop: soft clipping. Gain = 1 + (R2 + Drive) / R3, and R3 with C2 rolls off the bass before it’s clipped — that’s the mid hump. Swap D1/D2 for LEDs or germanium and listen.',
-    color: '#27ae60',
+    color: '#3f8f4f',
     parts: [
       { id: 'IN', type: 'IN', x: 0, y: 12 },
       { id: 'C1', type: 'C', x: 2, y: 12, value: 1e-6 },
       { id: 'R1', type: 'R', x: 8, y: 12, rot: 90, value: 1e6, lab: 'l' },
-      { id: 'U1', type: 'OA', x: 10, y: 10, chip: 'JRC4558', vsat: 3.5, gbw: 3e6, slew: 1e6 },
+      { id: 'U1', type: 'OA', x: 10, y: 10, chip: 'JRC4558', vsat: 3.5 },
       { id: 'R3', type: 'R', x: 8, y: 10, rot: 270, value: 4.7e3, lab: 'l' },
       { id: 'C2', type: 'C', x: 8, y: 6, rot: 270, value: 47e-9, lab: 'l' },
       { id: 'D1', type: 'D', x: 11, y: 8, model: '1N914' },
@@ -131,14 +131,14 @@ export const PEDALS = [
   {
     key: 'rodent',
     name: 'Rodent',
-    subtitle: 'RAT style · hard clipping',
+    subtitle: 'RAT style distortion',
     blurb: 'Huge op-amp gain (up to ~2000×) then two diodes straight to ground: hard clipping. Each RC leg on the inverting input is a high-pass; the LM308’s slow slew rate adds its own grit. R5 + Filter with C5 is a low-pass after the diodes.',
-    color: '#2c3e50',
+    color: '#25292d',
     parts: [
       { id: 'IN', type: 'IN', x: 0, y: 12 },
       { id: 'C1', type: 'C', x: 2, y: 12, value: 22e-9 },
       { id: 'R1', type: 'R', x: 8, y: 12, rot: 90, value: 1e6, lab: 'l' },
-      { id: 'U1', type: 'OA', x: 10, y: 10, chip: 'LM308', vsat: 3.5, gbw: 0.5e6, slew: 0.3e6 },
+      { id: 'U1', type: 'OA', x: 10, y: 10, chip: 'LM308', vsat: 3.5 },
       { id: 'R2', type: 'R', x: 8, y: 10, rot: 270, value: 47, lab: 'l' },
       { id: 'C2', type: 'C', x: 8, y: 6, rot: 270, value: 2.2e-6, polar: true, lab: 'l' },
       { id: 'R3', type: 'R', x: 4, y: 10, rot: 270, value: 560, lab: 'l' },

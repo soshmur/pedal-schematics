@@ -11,7 +11,7 @@
 //   - a pin or wire end landing anywhere on a wire segment connects (T-junction)
 //   - two wires crossing mid-segment do NOT connect
 
-import { DIODE_MODELS, BJT_MODELS } from './engine.js';
+import { DIODE_MODELS, BJT_MODELS, OPAMP_MODELS } from './engine.js';
 
 export const GRID = 20;
 
@@ -202,13 +202,16 @@ export function buildNetlist(def, state = {}) {
         elements.push({ id: part.id, type: 'Q', nodes: n, model: { ...BJT_MODELS[m], bf: hfe[part.id] ?? part.hfe } });
         break;
       }
-      case 'OA':
+      case 'OA': {
         // pins are [inv, non-inv, out]; the engine wants [non-inv, inv, out]
-        elements.push({ id: part.id, type: 'OA', nodes: [n[1], n[0], n[2]], model: { A: 1e5, gbw: part.gbw ?? 1e6, slew: part.slew ?? 1e6, vmid: SUPPLY.VREF, vsat: part.vsat ?? 3.5 } });
+        const chip = OPAMP_MODELS[models[part.id] ?? part.chip] || {};
+        elements.push({ id: part.id, type: 'OA', nodes: [n[1], n[0], n[2]],
+          model: { A: 1e5, gbw: chip.gbw ?? 1e6, slew: chip.slew ?? 1e6, vmid: SUPPLY.VREF, vsat: part.vsat ?? 3.5 } });
         break;
+      }
       case 'POT': {
         const pos = knobs[part.id] ?? part.pos ?? 0.5;
-        const f = taper(pos, part.taper || 'B');
+        const f = taper(pos, (state.tapers || {})[part.id] ?? part.taper ?? 'B');
         // R(ccw end -> wiper) = R*f
         const ccw = part.ccw || 0;
         const [e0, e1, w] = n;
@@ -399,12 +402,12 @@ export function valueText(part, state, formatSI) {
   switch (part.type) {
     case 'R': case 'POT': {
       const v = values[part.id] ?? part.value;
-      return formatSI(v) + (part.type === 'POT' ? (part.taper || 'B') : '');
+      return formatSI(v) + (part.type === 'POT' ? ((state.tapers || {})[part.id] ?? part.taper ?? 'B') : '');
     }
     case 'C': return formatSI(values[part.id] ?? part.value) + 'F';
     case 'D': { const m = models[part.id] ?? part.model; return m === 'none' ? 'removed' : m; }
     case 'Q': return `${models[part.id] ?? part.model} hFE ${(state.hfe || {})[part.id] ?? part.hfe}`;
-    case 'OA': return part.chip || 'op-amp';
+    case 'OA': return models[part.id] ?? part.chip ?? 'op-amp';
     default: return '';
   }
 }
@@ -430,7 +433,7 @@ export function renderSVG(def, state, { formatSI, selected, changed = new Set() 
 
   for (const part of def.parts) {
     if (['GND', 'VCC', 'VREF', 'IN', 'OUT'].includes(part.type)) { out += labelSymbol(part); continue; }
-    const editable = part.type !== 'OA';
+    const editable = true;
     const cls = ['part', `t-${part.type}`, editable ? 'editable' : '', selected === part.id ? 'selected' : '', changed.has(part.id) ? 'changed' : ''].join(' ');
     const tr = `translate(${part.x * g} ${part.y * g}) rotate(${part.rot || 0})${part.flip && part.type === 'OA' ? ` translate(0 ${2 * g}) scale(1 -1)` : ''}`;
     // invisible hit area so small parts are easy to tap

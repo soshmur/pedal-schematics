@@ -103,3 +103,22 @@ test('real-time budget: each pedal simulates faster than real time', () => {
     assert.ok(ms < realtime, `${def.name} too slow: ${ms.toFixed(0)} ms for ${realtime} ms`);
   }
 });
+
+test('awkward builds still converge: LED clipping, tiny R3, germanium fuzz, slow op-amp', async () => {
+  const { renderRiff } = await import('../js/riffs.js');
+  const riff = renderRiff('pentatonic', FS * 2).subarray(0, FS);
+  const builds = [
+    ['screamer', { models: { D1: 'LED' }, values: { R3: 1000 } }],
+    ['screamer', { models: { D1: 'none', D2: 'none' }, knobs: { VR1: 1 } }],
+    ['fuzz', { models: { Q1: 'Ge', Q2: 'Ge' }, hfe: { Q1: 60, Q2: 90 } }],
+    ['rodent', { models: { U1: 'TL072', D1: '1N34A', D2: 'LED' }, knobs: { VR1: 1 } }],
+  ];
+  for (const [key, st] of builds) {
+    const c = new Circuit(buildNetlist(pedalByKey(key), st), FS * 2);
+    for (let i = 0; i < riff.length; i++) {
+      const y = c.step(riff[i] * 0.8);
+      assert.ok(Number.isFinite(y) && Math.abs(y) < 20, `${key} output ${y}`);
+    }
+    assert.ok(c.stats.failures / c.stats.steps < 1e-4, `${key} ${JSON.stringify(st)}: ${c.stats.failures} Newton failures`);
+  }
+});
