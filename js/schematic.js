@@ -306,7 +306,7 @@ function symbol(part, state) {
         ? `<path class="body" d="M${2.3 * g} -12Q${2.15 * g} 0 ${2.3 * g} 12"/>`
         : `<path class="body" d="M${2.3 * g} -12V12"/>`;
       return `<path class="body" d="M0 0H${1.7 * g}M${1.7 * g} -12V12M${(polar ? 2.2 : 2.3) * g} 0H${4 * g}"/>${p2}` +
-        (polar ? `<path class="thin" d="M${1.2 * g} -10h7M${1.2 * g + 3.5} -13.5v7"/>` : '');
+        (polar ? `<path class="thin" d="M${1.15 * g} 11h7M${1.15 * g + 3.5} 7.5v7"/>` : '');
     }
     case 'D': {
       const m = (state.models || {})[part.id] ?? part.model;
@@ -389,6 +389,7 @@ function labelPos(part) {
     const top = Math.min(a[1], b[1]) * g;
     return { x: cx, y: top - 10, anchor: 'middle' };
   }
+  if (side === 'b' && part.type === 'POT') return { x: cx, y: cy + 23, anchor: 'middle', stack: true };
   return { x: cx, y: side === 'b' ? cy + 22 : cy - 13, anchor: 'middle' };
 }
 
@@ -439,7 +440,9 @@ export function renderSVG(def, state, { formatSI, selected, changed = new Set() 
     const hw = Math.max(...xs) - Math.min(...xs) + 28, hh = Math.max(...ys) - Math.min(...ys) + 28;
     out += `<g class="${cls}" data-id="${esc(part.id)}"${editable ? ' tabindex="0" role="button"' : ''} aria-label="${esc(part.id)} ${esc(valueText(part, state, formatSI))}">`;
     out += `<rect class="hit" x="${hx}" y="${hy}" width="${hw}" height="${hh}" rx="6"/>`;
-    out += `<g transform="${tr}">${symbol(part, state)}</g>`;
+    // part.plus = 1 puts a polarised cap's + on pin 1 (draw mirrored)
+    const mirror = part.type === 'C' && part.plus === 1 ? `<g transform="translate(${4 * g} 0) scale(-1 1)">` : '<g>';
+    out += `<g transform="${tr}">${mirror}${symbol(part, state)}</g></g>`;
     const lp = labelPos(part);
     const ref = part.knob ? `${part.id} ${part.knob}` : part.id;
     const val = valueText(part, state, formatSI);
