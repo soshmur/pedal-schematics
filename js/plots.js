@@ -24,7 +24,7 @@ const FONT = '12px "Barlow Semi Condensed", system-ui, sans-serif';
  */
 export function drawResponse(canvas, current, original) {
   const { g, w, h } = setup(canvas);
-  const pad = { l: 38, r: 10, t: 10, b: 22 };
+  const pad = { l: 50, r: 12, t: 10, b: 22 };
   const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
   const f0 = 20, f1 = 20000;
   const all = [...current.mag, ...(original ? original.mag : [])];
@@ -49,7 +49,7 @@ export function drawResponse(canvas, current, original) {
   g.textAlign = 'right';
   for (let db = bot; db <= top; db += 10) {
     g.beginPath(); g.moveTo(pad.l, Y(db)); g.lineTo(pad.l + pw, Y(db)); g.stroke();
-    g.fillText(db + ' dB', pad.l - 4, Y(db) + 4);
+    g.fillText((db < 0 ? '−' : '') + Math.abs(db) + ' dB', pad.l - 6, Y(db) + 4);
   }
   const line = (data, color, width, dash) => {
     g.save();

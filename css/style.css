@@ -521,3 +521,8 @@ fieldset { border: 0; padding: 0; margin: 12px 0 0; }
   font-size: 14px;
   z-index: 20;
 }
+
+/* keep the schematic clear of the floating editor on wide screens */
+@media (min-width: 861px) {
+  body.editing .layout { padding-right: 380px; }
+}

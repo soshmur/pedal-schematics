@@ -205,7 +205,7 @@ function applyZoom() {
   const wrap = $('#schematic');
   const vb = svg.viewBox.baseVal;
   const fit = (wrap.clientWidth - 16) / vb.width;
-  const z = state.zoom ?? Math.min(1.25, Math.max(fit, 0.62));
+  const z = state.zoom ?? Math.min(1.25, Math.max(fit, 0.8)); // below ~0.8 labels get too small, so scroll instead
   svg.setAttribute('width', Math.round(vb.width * z));
   svg.setAttribute('height', Math.round(vb.height * z));
   wrap.style.setProperty('--zoom', z);
@@ -553,6 +553,7 @@ const isSheet = () => matchMedia('(max-width: 860px)').matches;
 
 function openEditor(id) {
   state.selected = id;
+  document.body.classList.add('editing');
   renderSchematic();
   renderEditor();
   if (isSheet()) {
@@ -573,6 +574,7 @@ function openEditor(id) {
 function closeEditor() {
   state.selected = null;
   $('#editor').hidden = true;
+  document.body.classList.remove('editing');
   document.body.style.paddingBottom = '';
   renderSchematic();
 }
@@ -640,6 +642,8 @@ function switchPedal(key) {
   state.key = key;
   state.selected = null;
   $('#editor').hidden = true;
+  document.body.classList.remove('editing');
+  document.body.style.paddingBottom = '';
   history.replaceState(null, '', `#${key}`);
   renderPedal();
   update();
