@@ -522,10 +522,11 @@ function refreshPins() {
   const v = nodes.map((n) => c.nodeVoltage(n));
   const names = pinNames(p);
   let extra = '';
-  if (p.type === 'Q') extra = `<dt>V<sub>BE</sub> / V<sub>CE</sub></dt><dd>${(v[1] - v[2]).toFixed(2)} V / ${(v[0] - v[2]).toFixed(2)} V</dd>`;
-  if (p.type === 'D') extra = `<dt>Across it</dt><dd>${(v[0] - v[1]).toFixed(3)} V</dd>`;
+  const fmt = (x, d = 2) => (Math.abs(x) < 0.5 * Math.pow(10, -d) ? 0 : x).toFixed(d);
+  if (p.type === 'Q') extra = `<dt>V<sub>BE</sub> / V<sub>CE</sub></dt><dd>${fmt(v[1] - v[2])} V / ${fmt(v[0] - v[2])} V</dd>`;
+  if (p.type === 'D') extra = `<dt>Across it</dt><dd>${fmt(v[0] - v[1], 3)} V</dd>`;
   box.innerHTML = `<p>DC voltages with no signal${c.dcConverged ? '' : ' (bias did not converge)'}</p><dl>
-    ${names.map((nm, i) => `<dt>${nm}</dt><dd>${v[i].toFixed(2)} V</dd>`).join('')}${extra}</dl>`;
+    ${names.map((nm, i) => `<dt>${nm}</dt><dd>${fmt(v[i])} V</dd>`).join('')}${extra}</dl>`;
 }
 
 function refreshEditorArt() {
@@ -548,14 +549,31 @@ function refreshReset() {
   if (reset) reset.hidden = !changedParts().has(state.selected);
 }
 
+const isSheet = () => matchMedia('(max-width: 860px)').matches;
+
 function openEditor(id) {
   state.selected = id;
   renderSchematic();
   renderEditor();
+  if (isSheet()) {
+    // the editor is a bottom sheet here: make room for it and keep the part in view above it
+    const sheet = $('#editor').offsetHeight;
+    document.body.style.paddingBottom = `${sheet}px`;
+    const el = $(`#schematic .part[data-id="${CSS.escape(id)}"]`);
+    if (el) {
+      const r = el.getBoundingClientRect();
+      const visible = window.innerHeight - sheet;
+      if (r.top < 8 || r.bottom > visible - 8) window.scrollBy({ top: r.top - (visible - r.height) / 2, behavior: 'smooth' });
+      const wrap = $('#schematic');
+      const wr = wrap.getBoundingClientRect();
+      if (r.left < wr.left || r.right > wr.right) wrap.scrollBy({ left: r.left - wr.left - (wr.width - r.width) / 2, behavior: 'smooth' });
+    }
+  }
 }
 function closeEditor() {
   state.selected = null;
   $('#editor').hidden = true;
+  document.body.style.paddingBottom = '';
   renderSchematic();
 }
 

@@ -1,1 +1,12 @@
-{"type":"module"}
+{
+  "name": "pedal-schematics",
+  "version": "0.1.0",
+  "description": "Guitar pedal simulator: edit the schematic's resistors, capacitors, diodes and transistors and hear the circuit live",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "license": "MIT"
+}
