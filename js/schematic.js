@@ -11,7 +11,7 @@
 //   - a pin or wire end landing anywhere on a wire segment connects (T-junction)
 //   - two wires crossing mid-segment do NOT connect
 
-import { DIODE_MODELS, BJT_MODELS, OPAMP_MODELS } from './engine.js';
+import { DIODE_MODELS, BJT_MODELS, OPAMP_MODELS, BBD_MODELS } from './engine.js';
 
 export const GRID = 20;
 
@@ -23,6 +23,7 @@ const PINS = {
   POT: [[0, 0], [4, 0], [2, -2]], // end 0, end 1, wiper
   OA: [[0, 0], [0, 2], [4, 1]], // inverting, non-inverting, output
   Q: [[2, -2], [0, 0], [2, 2]], // collector, base, emitter
+  BBD: [[0, 0], [6, 0], [3, 3]], // audio in, audio out, clock CV
   GND: [[0, 0]], VCC: [[0, 0]], VREF: [[0, 0]], IN: [[0, 0]], OUT: [[0, 0]],
 };
 
@@ -202,7 +203,17 @@ export function buildNetlist(def, state = {}) {
         elements.push({ id: part.id, type: 'Q', nodes: n, model: { ...BJT_MODELS[m], bf: hfe[part.id] ?? part.hfe } });
         break;
       }
+      case 'BBD': {
+        const chip = BBD_MODELS[models[part.id] ?? part.chip];
+        elements.push({ id: part.id, type: 'BBD', nodes: n,
+          model: { stages: chip.stages, swing: chip.swing, fc: values[part.id] ?? part.value, vOct: part.vOct ?? 2, vbias: SUPPLY.VREF } });
+        break;
+      }
       case 'OA': {
+        if (part.comparator) {
+          elements.push({ id: part.id, type: 'CMP', nodes: [n[1], n[0], n[2]], model: { vmid: SUPPLY.VREF, vsat: part.vsat ?? 3.5 } });
+          break;
+        }
         // pins are [inv, non-inv, out]; the engine wants [non-inv, inv, out]
         const chip = OPAMP_MODELS[models[part.id] ?? part.chip] || {};
         elements.push({ id: part.id, type: 'OA', nodes: [n[1], n[0], n[2]],
@@ -269,6 +280,19 @@ export function toSpice(def, net) {
         lines.push(`B${id} ${o} 0 V=${e.model.vmid}+${e.model.vsat}*tanh(${e.model.A}*(V(${p})-V(${n}))/${e.model.vsat})`);
         break;
       }
+      case 'CMP': {
+        const [p, n, o] = e.nodes.map(nm);
+        lines.push(`* ${id}: op-amp used as a comparator`, `B${id} ${o} 0 V=${e.model.vmid}+${e.model.vsat}*tanh(1e4*(V(${p})-V(${n})))`);
+        break;
+      }
+      case 'BBD': {
+        const [i, o, cv] = e.nodes.map(nm);
+        const ms = (e.model.stages / (2 * e.model.fc) * 1000).toFixed(1);
+        lines.push(`* ${id}: ${e.model.stages}-stage BBD, clock ${e.model.fc} Hz at 4.5 V on ${cv} (${ms} ms).`,
+          '* SPICE has no clocked delay line, so it is a fixed transmission-line delay here.',
+          `T${id} ${i} 0 ${o}_t 0 Z0=1k TD=${ms}m`, `R${id}_t ${o}_t 0 1k`, `E${id} ${o} 0 ${o}_t 0 1`);
+        break;
+      }
     }
   }
   lines.push(...models, '.tran 10u 50m', `.ac dec 50 20 20k`, `.probe V(${nm(net.output)})`, '.end');
@@ -325,12 +349,22 @@ function symbol(part, state) {
       return s;
     }
     case 'OA': {
-      const flip = part.flip;
-      const yi = flip ? 2 * g : 0, yn = flip ? 0 : 2 * g;
+      // inverting input on top; a flipped op-amp is mirrored by its transform
+      const yi = 0, yn = 2 * g;
       return `<path class="body" d="M0 0H12M0 ${2 * g}H12M${3.4 * g} ${g}H${4 * g}"/>` +
         `<path class="body opamp" d="M12 -16L12 ${2 * g + 16}L${3.4 * g} ${g}Z"/>` +
         `<path class="thin" d="M17 ${yi}h8"/>` +
         `<path class="thin" d="M17 ${yn}h8M21 ${yn - 4}v8"/>`;
+    }
+    case 'BBD': {
+      // chip body with a row of "buckets" and a clock input underneath
+      let buckets = '';
+      for (let i = 0; i < 6; i++) buckets += `<rect class="thin" x="${1.3 * g + i * 11}" y="-5" width="7" height="10" rx="1"/>`;
+      return `<path class="body" d="M0 0H${0.8 * g}M${5.2 * g} 0H${6 * g}M${3 * g} ${1.4 * g}V${3 * g}"/>` +
+        `<rect class="body opamp" x="${0.8 * g}" y="${-1.4 * g}" width="${4.4 * g}" height="${2.8 * g}" rx="3"/>` +
+        buckets +
+        `<path class="thin" d="M${4.5 * g - 6} 0h10l-4 -4M${4.5 * g + 4} 0l-4 4"/>` +
+        `<text class="pin" x="${3 * g}" y="${1.4 * g - 5}" text-anchor="middle">clk</text>`;
     }
     case 'Q': {
       const ge = ((state.models || {})[part.id] ?? part.model) === 'Ge';
@@ -380,6 +414,10 @@ function labelPos(part) {
     const [, b] = pins;
     return { x: b[0] * g + 2.6 * g, y: b[1] * g, anchor: 'start', stack: true };
   }
+  if (part.type === 'BBD') {
+    const [a] = pins;
+    return { x: (a[0] + 3) * g, y: (a[1] - 1.4) * g - 8, anchor: 'middle' };
+  }
   const [a, b] = pins;
   const cx = (a[0] + b[0]) / 2 * g, cy = (a[1] + b[1]) / 2 * g;
   const vertical = a[0] === b[0];
@@ -407,7 +445,8 @@ export function valueText(part, state, formatSI) {
     case 'C': return formatSI(values[part.id] ?? part.value) + 'F';
     case 'D': { const m = models[part.id] ?? part.model; return m === 'none' ? 'removed' : m; }
     case 'Q': return `${models[part.id] ?? part.model} hFE ${(state.hfe || {})[part.id] ?? part.hfe}`;
-    case 'OA': return models[part.id] ?? part.chip ?? 'op-amp';
+    case 'OA': return part.comparator ? 'comparator' : models[part.id] ?? part.chip ?? 'op-amp';
+    case 'BBD': return `${models[part.id] ?? part.chip}, clock ${formatSI(values[part.id] ?? part.value)}Hz`;
     default: return '';
   }
 }

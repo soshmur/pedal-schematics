@@ -18,6 +18,8 @@
 //       { id, type: 'D',   nodes: [a, k],    model: { Is, n } },
 //       { id, type: 'Q',   nodes: [c, b, e], model: { Is, bf, br, pol } }, // pol +1 NPN, -1 PNP
 //       { id, type: 'OA',  nodes: [p, n, o], model: { A, gbw, slew, vmid, vsat } },
+//       { id, type: 'CMP', nodes: [p, n, o], model: { vmid, vsat } },       // op-amp used as a comparator
+//       { id, type: 'BBD', nodes: [in, out, cv], model: { stages, fc, vOct, swing, vbias } },
 //   ] }
 
 export const VT = 0.025852; // thermal voltage at ~27 °C
@@ -42,6 +44,21 @@ export const OPAMP_MODELS = {
   'OP07': { label: 'OP07 (slow precision)', gbw: 0.6e6, slew: 0.3e6 },
   'LM741': { label: 'µA741 (vintage)', gbw: 1e6, slew: 0.5e6 },
 };
+
+// Bucket-brigade delay chips. Delay = stages / (2 · clock frequency).
+export const BBD_MODELS = {
+  'MN3207': { label: 'MN3207 (1024 stages, chorus)', stages: 1024, swing: 1.4 },
+  'MN3007': { label: 'MN3007 (1024 stages, low noise)', stages: 1024, swing: 1.6 },
+  'MN3008': { label: 'MN3008 (2048 stages)', stages: 2048, swing: 1.4 },
+  'MN3005': { label: 'MN3005 (4096 stages, long delay)', stages: 4096, swing: 1.3 },
+};
+
+/** BBD clock (an exponential VCO) at control voltage cv. */
+export function bbdClock(m, cv) {
+  const f = m.fc * Math.pow(2, (cv - 4.5) / (m.vOct || 2));
+  return Math.min(2e6, Math.max(m.fc / 16, f));
+}
+export const bbdDelay = (m, cv) => m.stages / (2 * bbdClock(m, cv));
 
 const GMIN = 1e-12;
 const MAX_EXP = 80;
@@ -280,7 +297,9 @@ export class Circuit {
     const idx = (node) => node - 1;
     let extra = N;
     const prev = keepState ? this : null;
+    const oldBbds = keepState ? this.bbds || [] : [], oldCmps = keepState ? this.cmps || [] : [];
     this.res = []; this.caps = []; this.vsrc = []; this.diodes = []; this.bjts = []; this.opamps = [];
+    this.bbds = []; this.cmps = [];
     this.input = null;
     for (const e of els) {
       const nd = e.nodes.map(idx);
@@ -312,6 +331,24 @@ export class Circuit {
           this.opamps.push({ p: nd[0], n: nd[1], o: nd[2], z, gm: A, imax: slew * Cz, vmid, vsat, row: extra++ });
           break;
         }
+        case 'CMP': {
+          // Op-amp wired as a comparator (e.g. the Schmitt trigger in an LFO).
+          // Its output is decided from the previous sample's inputs, so the
+          // positive feedback that gives it hysteresis never has to be solved
+          // implicitly (backward Euler would damp it and the LFO would stall).
+          const { vmid = 4.5, vsat = 3.5 } = e.model || {};
+          const old = oldCmps[this.cmps.length];
+          this.cmps.push({ p: nd[0], n: nd[1], o: nd[2], vmid, vsat, row: extra++, held: old ? old.held : vmid });
+          break;
+        }
+        case 'BBD': {
+          const m = e.model;
+          const old = oldBbds[this.bbds.length];
+          const b = { in: nd[0], out: nd[1], cv: nd[2], m, row: extra++, held: old ? old.held : 0, phase: 0, buf: null, w: 0, delay: 0 };
+          if (old && old.buf) { b.buf = old.buf; b.w = old.w; b.phase = old.phase; b.delay = old.delay; }
+          this.bbds.push(b);
+          break;
+        }
         default: throw new Error('Unknown element type ' + e.type);
       }
     }
@@ -332,6 +369,16 @@ export class Circuit {
     this.nonlinear = this.diodes.length + this.bjts.length + this.opamps.length > 0;
     this.sparse = null;
     this._oldCaps = this.caps;
+    // a value edit can change a delay chip's size: resize its line, keep its output
+    for (const b of this.bbds) {
+      const need = Math.ceil(b.m.stages / (2 * (b.m.fc / 16)) * this.fs) + 4;
+      if (!b.buf || b.buf.length !== need) {
+        const v = b.buf ? b.held : (b.in >= 0 && this.x[b.in]) || 4.5;
+        const held = b.held || v;
+        this._bbdReset(b, v, b.cv >= 0 ? this.x[b.cv] || 4.5 : 4.5);
+        b.held = held;
+      }
+    }
     this._stampLinear(false);
   }
 
@@ -359,6 +406,13 @@ export class Circuit {
       add(o.z, o.z, 1);
       add(o.o, o.row, 1);
       add(o.row, o.o, 1);
+    }
+    // comparator / BBD outputs are voltage sources whose value is set per step
+    for (const c of this.cmps) { add(c.o, c.row, 1); add(c.row, c.o, 1); }
+    for (const b of this.bbds) {
+      add(b.out, b.row, 1); add(b.row, b.out, 1);
+      // at DC (and in the AC sweep) a delay line is just a unity buffer
+      if (dc) add(b.row, b.in, -1);
     }
   }
 
@@ -410,6 +464,11 @@ export class Circuit {
       for (const j of [o.p, o.n, o.z]) if (j >= 0) P[o.z * n + j] = 1;
       for (const j of [o.z, o.o]) if (j >= 0) P[o.row * n + j] = 1;
       if (o.o >= 0) P[o.o * n + o.row] = 1;
+    }
+    for (const c of this.cmps) { if (c.o >= 0) { P[c.o * n + c.row] = 1; P[c.row * n + c.o] = 1; } }
+    for (const b of this.bbds) {
+      if (b.out >= 0) { P[b.out * n + b.row] = 1; P[b.row * n + b.out] = 1; }
+      if (b.in >= 0) P[b.row * n + b.in] = 1;
     }
     return P;
   }
@@ -482,6 +541,7 @@ export class Circuit {
   _rhs(vin, dc, srcScale = 1) {
     const rhs = new Float64Array(this.n);
     for (const v of this.vsrc) rhs[v.row] = v.V * srcScale;
+    for (const c of this.cmps) rhs[c.row] = c.held * srcScale;
     if (this.input && vin) {
       const I = vin * this.input.g;
       if (this.input.p >= 0) rhs[this.input.p] += I;
@@ -504,6 +564,7 @@ export class Circuit {
     this.x.fill(0);
     for (const d of this.diodes) d.vd = 0;
     for (const q of this.bjts) { q.vbe = 0; q.vbc = 0; }
+    for (const c of this.cmps) c.held = c.vmid;
     let ok = true;
     // source stepping: ramp the supplies up so Newton never has to jump far
     const steps = 20;
@@ -516,9 +577,59 @@ export class Circuit {
     const V = (i) => (i >= 0 ? this.x[i] : 0);
     for (const c of this.caps) { c.v = V(c.a) - V(c.b); c.i = 0; }
     this.dcX = Float64Array.from(this.x);
+    // start each LFO swinging (a real one starts from power-on noise)
+    for (const c of this.cmps) c.held = c.vmid + c.vsat;
+    for (const b of this.bbds) this._bbdReset(b, V(b.in), V(b.cv));
     this._stampLinear(false);
     this._rhsBuf = new Float64Array(this.n);
     return ok;
+  }
+
+  _bbdReset(b, vin, cv) {
+    const m = b.m;
+    const maxDelay = m.stages / (2 * (m.fc / 16));
+    const len = Math.ceil(maxDelay * this.fs) + 4;
+    if (!b.buf || b.buf.length !== len) b.buf = new Float32Array(len);
+    b.buf.fill(vin);
+    b.w = 0;
+    b.phase = 0;
+    b.held = vin;
+    b.delay = bbdDelay(m, cv);
+  }
+
+  // Advance delay lines and comparators by one sample (after the circuit solve).
+  _clockDevices() {
+    const x = this.x;
+    const V = (i) => (i >= 0 ? x[i] : 0);
+    for (const c of this.cmps) {
+      const vd = V(c.p) - V(c.n);
+      c.held = c.vmid + c.vsat * Math.tanh(vd * 1e4);
+    }
+    const fs = this.fs;
+    for (const b of this.bbds) {
+      const buf = b.buf, len = buf.length;
+      buf[b.w] = V(b.in);
+      const m = b.m;
+      const f = bbdClock(m, V(b.cv));
+      b.delay = m.stages / (2 * f);
+      // The BBD only moves a new sample to its output once per clock period:
+      // at slow clocks (long delays) this sample-and-hold is what makes a
+      // BBD delay dark and gritty. Real circuits filter it afterwards.
+      b.phase += f / fs;
+      if (b.phase >= 1) {
+        b.phase -= Math.floor(b.phase);
+        let d = b.delay * fs;
+        if (d > len - 3) d = len - 3;
+        if (d < 1) d = 1;
+        const i = Math.floor(d), frac = d - i;
+        const a = buf[(b.w - i + len) % len], c = buf[(b.w - i - 1 + len) % len];
+        const v = a + (c - a) * frac;
+        // limited headroom around the chip's bias
+        const sw = m.swing || 1.4, vb = m.vbias ?? 4.5;
+        b.held = vb + sw * Math.tanh((v - vb) / sw);
+      }
+      b.w = (b.w + 1) % len;
+    }
   }
 
   /** Node voltages (by node number, 0 = ground) of the last solution. */
@@ -535,6 +646,7 @@ export class Circuit {
       if (!this._substep(prev, vin, 1)) this.stats.failures++;
     }
     this.vinPrev = vin;
+    if (this.cmps.length || this.bbds.length) this._clockDevices();
     const o = this.out;
     return o >= 0 ? this.x[o] : 0;
   }
@@ -568,6 +680,8 @@ export class Circuit {
     const rhs = this._rhsBuf;
     rhs.fill(0);
     for (const v of this.vsrc) rhs[v.row] = v.V;
+    for (const c of this.cmps) rhs[c.row] = c.held;
+    for (const b of this.bbds) rhs[b.row] = b.held;
     if (this.input) {
       const I = vin * this.input.g;
       if (this.input.p >= 0) rhs[this.input.p] += I;

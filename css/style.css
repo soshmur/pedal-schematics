@@ -139,7 +139,12 @@ button, select, input { font: inherit; color: inherit; }
 @media (max-width: 860px) {
   .top { padding: 10px 16px 8px; gap: 6px 16px; position: static; }
   .wordmark { font-size: 22px; }
-  .pedal-tabs { flex-wrap: nowrap; overflow-x: auto; width: 100%; margin: 0 -16px; padding: 0 12px; scrollbar-width: none; }
+  .pedal-tabs {
+    flex-wrap: nowrap; overflow-x: auto; width: calc(100% + 32px); margin: 0 -16px; padding: 0 12px; scrollbar-width: none;
+    /* fade the right edge so it's clear there are more pedals */
+    -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
+    mask-image: linear-gradient(90deg, #000 85%, transparent);
+  }
   .pedal-tabs button { flex: none; }
   .board-head { flex-direction: column; gap: 10px; }
   .blurb { font-size: 14px; }
@@ -577,3 +582,4 @@ fieldset { border: 0; padding: 0; margin: 12px 0 0; }
 .meter.clip .meter-bar i { background: #d0342c; }
 .meter.clip output { color: #d0342c; font-weight: 700; }
 .live .note { margin: 0; }
+.schematic .pin { font-size: 9.5px; fill: var(--muted); }

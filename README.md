@@ -6,7 +6,7 @@ a real circuit simulation running in your browser.
 
 **Live:** https://soshmur.github.io/pedal-schematics/
 
-Four circuits to start from:
+Six circuits to start from:
 
 | Pedal | Based on | Try changing |
 |---|---|---|
@@ -14,6 +14,8 @@ Four circuits to start from:
 | Fuzz Face | Dallas Arbiter Fuzz Face | hFE, germanium vs silicon, the Bias trimmer |
 | Screamer | Ibanez TS808 clipping stage | D1/D2 → LEDs or germanium; R3/C2 move the mid hump |
 | Rodent | ProCo RAT | the op-amp chip (slew rate!), R2/R3 gain legs, clipping diodes |
+| Analog Delay | Boss DM-2 | the BBD chip (1024–4096 stages), its clock, R5 for runaway repeats |
+| Chorus | Boss CE-2 | C4 / R7 for LFO speed, R5/R6 for sweep width, BBD clock for the centre delay |
 
 They are "-style" circuits: the stages that shape the sound, without the input
 and output buffers.
@@ -58,6 +60,11 @@ is derived from that:
    - op-amps as a macro-model with gain-bandwidth, slew rate and soft rail
      clipping (so swapping a TL072 for an LM308 in the Rodent actually changes
      the sound),
+   - bucket-brigade delay chips as a clocked delay line: delay = stages ÷
+     (2 × clock), with the clock set by a voltage on its `clk` pin. A slow
+     clock gives a long delay but a darker, grittier one, as on the real chip.
+     The surrounding filters, mixer, feedback loop and the chorus's op-amp
+     LFO are ordinary circuit,
    - a sparse LU with a fixed pivot order (the matrix structure never changes,
      only its values), and
    - when Newton fails to converge, the sample is retried in smaller time
@@ -111,12 +118,14 @@ Add an entry to `PEDALS` in `js/pedals.js`:
 ```
 
 Part types: `R`, `C` (`polar: true` for electrolytics), `D`, `Q` (NPN),
-`OA` (op-amp), `POT` (`knob: 'Name'` puts it on the enclosure, `trim: true`
+`OA` (op-amp; `comparator: true` for a Schmitt trigger), `BBD` (`chip`,
+`value` = clock at 4.5 V, `vOct`), `POT` (`knob: 'Name'` puts it on the enclosure, `trim: true`
 keeps it on the board), plus `IN`, `OUT`, `GND`, `VCC` (+9 V) and `VREF`
 (4.5 V). Run `npm test` — it will tell you about any pin that isn't connected.
 
 ## Ideas for next
 
+- BBD compander (NE570) and clock noise for a more authentic delay
 - PNP germanium Fuzz Face (positive ground) and JFETs
 - Big Muff (four transistor stages and the tone stack)
 - chaining pedals, and a drag-and-drop schematic editor

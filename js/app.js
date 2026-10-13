@@ -1,6 +1,6 @@
 import { PEDALS, pedalByKey } from './pedals.js';
 import { buildNetlist, renderSVG, toSpice } from './schematic.js';
-import { Circuit, logFreqs, DIODE_MODELS, BJT_MODELS, OPAMP_MODELS, VT } from './engine.js';
+import { Circuit, logFreqs, DIODE_MODELS, BJT_MODELS, OPAMP_MODELS, BBD_MODELS, VT, bbdDelay } from './engine.js';
 import { parseValue, formatSI, formatValue, snapToSeries } from './units.js';
 import { AudioEngine } from './audio.js';
 import { drawResponse, drawScope } from './plots.js';
@@ -353,8 +353,12 @@ function renderChanges() {
 }
 
 function renderTabs() {
-  $('#tabs').innerHTML = PEDALS.map((p) =>
+  const box = $('#tabs');
+  box.innerHTML = PEDALS.map((p) =>
     `<button role="tab" style="--swatch:${p.color}" aria-selected="${p.key === state.key}" data-key="${p.key}">${esc(p.name)}</button>`).join('');
+  // on narrow screens the tabs scroll sideways: bring the current one into view
+  const sel = box.querySelector('[aria-selected="true"]');
+  if (sel && box.scrollWidth > box.clientWidth) box.scrollLeft = sel.offsetLeft - (box.clientWidth - sel.offsetWidth) / 2;
 }
 
 function renderPedal() {
@@ -363,6 +367,9 @@ function renderPedal() {
   $('#pedalName').textContent = d.name;
   $('#pedalSub').textContent = d.subtitle;
   $('#blurb').textContent = d.blurb;
+  $('#bodeNote').textContent = d.parts.some((p) => p.type === 'BBD')
+    ? 'Small-signal gain with the delay line counted as zero delay, so it shows the tone, not the echoes. Dashed line: stock parts.'
+    : 'Small-signal gain from input to output. Dashed line: stock parts.';
   renderTabs();
   renderKnobs();
   setLed();
@@ -513,6 +520,13 @@ function artFor(p) {
         <rect x="140" y="12" width="9" height="26" fill="${m === 'BAT41' ? '#ddd' : '#1d1d1d'}"/>
       </svg>`;
     }
+    case 'BBD': {
+      const m = e.models[p.id] ?? p.chip;
+      const legs = [0, 1, 2, 3].map((i) => `<path d="M${52 + i * 34} 8v-8M${52 + i * 34} 64v8" stroke="#9aa5ab" stroke-width="5"/>`).join('');
+      return `<svg viewBox="0 0 200 72" width="200" height="72" aria-hidden="true">${legs}
+        <rect x="30" y="8" width="140" height="56" rx="4" fill="#1d1d1d"/><circle cx="44" cy="22" r="4" fill="#3a3a3a"/>
+        <text x="100" y="42" fill="#ddd" font-size="17" font-weight="700" text-anchor="middle">${esc(m)}</text></svg>`;
+    }
     case 'Q': {
       const ge = (e.models[p.id] ?? p.model) === 'Ge';
       return ge
@@ -525,14 +539,15 @@ function artFor(p) {
 
 // ---------------------------------------------------------------- editor
 
-const KIND = { R: 'Resistor', C: 'Capacitor', D: 'Diode', Q: 'Transistor', POT: 'Potentiometer', OA: 'Op-amp' };
-const RANGE = { R: [1, 10e6], POT: [100, 10e6], C: [1e-12, 1e-3] };
+const KIND = { R: 'Resistor', C: 'Capacitor', D: 'Diode', Q: 'Transistor', POT: 'Potentiometer', OA: 'Op-amp', BBD: 'Bucket-brigade delay' };
+const RANGE = { R: [1, 10e6], POT: [100, 10e6], C: [1e-12, 1e-3], BBD: [1e3, 2e6] };
 
 function pinNames(p) {
   switch (p.type) {
     case 'D': return ['Anode', 'Cathode'];
     case 'Q': return ['Collector', 'Base', 'Emitter'];
     case 'OA': return ['Inverting in (−)', 'Non-inverting in (+)', 'Output'];
+    case 'BBD': return ['Audio in', 'Audio out', 'Clock CV'];
     case 'POT': return p.ccw ? ['Clockwise end', 'Anticlockwise end', 'Wiper'] : ['Anticlockwise end', 'Clockwise end', 'Wiper'];
     default: return ['Pin 1', 'Pin 2'];
   }
@@ -545,28 +560,31 @@ function vf(model) {
 function valueField(p) {
   const v = edits().values[p.id] ?? p.value;
   const [lo, hi] = RANGE[p.type];
-  const min = Math.max(lo, p.value / 100), max = Math.min(hi, p.value * 100);
+  const span = p.type === 'BBD' ? 10 : 100;
+  const min = Math.max(lo, p.value / span), max = Math.min(hi, p.value * span);
   const t = Math.round(1000 * Math.log(v / min) / Math.log(max / min));
-  const unit = p.type === 'C' ? 'F' : 'Ω';
+  const unit = p.type === 'C' ? 'F' : p.type === 'BBD' ? 'Hz' : 'Ω';
+  const stock = p.type === 'BBD' ? `${formatSI(p.value)}Hz` : formatValue(p.value, p.type === 'C' ? 'C' : 'R');
+  const label = p.type === 'BBD' ? 'Clock at 4.5 V on the clk pin' : 'Value (type 4k7, 47n, 2.2u…)';
   return `
     <label class="field">
-      <span>Value (type 4k7, 47n, 2.2u…)</span>
+      <span>${label}</span>
       <span class="value-row">
         <input type="text" id="edValue" value="${esc(formatSI(v))}" inputmode="text" autocomplete="off" spellcheck="false">
         <span class="unit">${unit}</span>
-        <span class="unit">stock ${esc(formatValue(p.value, p.type === 'C' ? 'C' : 'R'))}</span>
+        <span class="unit">stock ${esc(stock)}</span>
       </span>
     </label>
     <div class="field">
       <input type="range" id="edSlider" min="0" max="1000" value="${Math.min(1000, Math.max(0, t))}" aria-label="Value" data-min="${min}" data-max="${max}">
       <div class="range-ends"><span>${esc(formatSI(min))}${unit}</span><span>${esc(formatSI(max))}${unit}</span></div>
     </div>
-    <div class="field">
+    ${p.type === 'BBD' ? '' : `<div class="field">
       <span>Slider snaps to</span>
       <div class="segmented" role="radiogroup" aria-label="Preferred values">
         ${['E12', 'E24', 'off'].map((s) => `<label><input type="radio" name="snap" value="${s}" ${state.snap === s ? 'checked' : ''}>${s === 'off' ? 'Any value' : s}</label>`).join('')}
       </div>
-    </div>`;
+    </div>`}`;
 }
 
 function renderEditor() {
@@ -611,7 +629,16 @@ function renderEditor() {
       </label>
       <p class="note">Germanium parts have lower turn-on voltage and far more leakage. Changing either will move the bias point, so check the DC voltages below.</p>`;
   }
-  if (p.type === 'OA') {
+  if (p.type === 'BBD') {
+    const m = e.models[p.id] ?? p.chip;
+    body = `<fieldset><legend>Chip</legend><div class="options">
+      ${Object.entries(BBD_MODELS).map(([k, b]) => `<label><input type="radio" name="bbdmodel" value="${k}" ${m === k ? 'checked' : ''}><span>${esc(b.label)}</span><small>${(b.stages / (2 * (e.values[p.id] ?? p.value)) * 1000).toFixed(1)} ms at 4.5 V</small></label>`).join('')}
+    </div></fieldset>` + valueField(p) +
+    `<p class="note">Delay = stages ÷ (2 × clock). The clock rises one octave for every ${p.vOct ?? 2} V on the clk pin. A slower clock gives a longer delay, but the chip takes fewer samples, so the repeats get darker and grittier.</p>`;
+  }
+  if (p.type === 'OA' && p.comparator) {
+    body = '<p class="note">Wired as a comparator. With R6 feeding its output back to the + input it becomes a Schmitt trigger: its output slams between the rails and flips when the triangle wave crosses a threshold. The thresholds are ±3.5 V × R5 / R6 around 4.5 V.</p>';
+  } else if (p.type === 'OA') {
     const m = e.models[p.id] ?? p.chip;
     body = `<fieldset><legend>Chip</legend><div class="options">
       ${Object.entries(OPAMP_MODELS).map(([k, o]) => `<label><input type="radio" name="oamodel" value="${k}" ${m === k ? 'checked' : ''}><span>${esc(o.label)}</span><small>${o.slew / 1e6} V/µs</small></label>`).join('')}
@@ -646,7 +673,13 @@ function refreshPins() {
   const fmt = (x, d = 2) => (Math.abs(x) < 0.5 * Math.pow(10, -d) ? 0 : x).toFixed(d);
   if (p.type === 'Q') extra = `<dt>V<sub>BE</sub> / V<sub>CE</sub></dt><dd>${fmt(v[1] - v[2])} V / ${fmt(v[0] - v[2])} V</dd>`;
   if (p.type === 'D') extra = `<dt>Across it</dt><dd>${fmt(v[0] - v[1], 3)} V</dd>`;
-  box.innerHTML = `<p>DC voltages with no signal${c.dcConverged ? '' : ' (bias did not converge)'}</p><dl>
+  if (p.type === 'BBD') {
+    const el = state.net.elements.find((x) => x.id === p.id);
+    extra = `<dt>Delay at this clock CV</dt><dd>${(bbdDelay(el.model, v[2]) * 1000).toFixed(1)} ms</dd>`;
+  }
+  const lfo = def().parts.some((q) => q.comparator);
+  const head = lfo ? 'Voltages at power-up, before the LFO starts moving' : 'DC voltages with no signal';
+  box.innerHTML = `<p>${head}${c.dcConverged ? '' : ' (bias did not converge)'}</p><dl>
     ${names.map((nm, i) => `<dt>${nm}</dt><dd>${fmt(v[i])} V</dd>`).join('')}${extra}</dl>`;
 }
 
@@ -717,7 +750,7 @@ function bindEditor() {
     if (t.id === 'edSlider') {
       const min = parseFloat(t.dataset.min), max = parseFloat(t.dataset.max);
       let v = min * Math.pow(max / min, t.value / 1000);
-      v = state.snap === 'off' ? parseFloat(v.toPrecision(3)) : snapToSeries(v, state.snap);
+      v = state.snap === 'off' || p.type === 'BBD' ? parseFloat(v.toPrecision(3)) : snapToSeries(v, state.snap);
       if (v !== (edits().values[id] ?? p.value)) setValue(id, v);
     }
     if (t.id === 'edValue') {
@@ -745,7 +778,7 @@ function bindEditor() {
     }
     if (t.name === 'snap') { state.snap = t.value; persist(); }
     if (t.name === 'taper') { edits().tapers[id] = t.value; update(); renderEditor(); }
-    if (t.name === 'dmodel' || t.name === 'qmodel' || t.name === 'oamodel') {
+    if (t.name === 'dmodel' || t.name === 'qmodel' || t.name === 'oamodel' || t.name === 'bbdmodel') {
       edits().models[id] = t.value;
       update();
       renderEditor();

@@ -122,3 +122,112 @@ test('awkward builds still converge: LED clipping, tiny R3, germanium fuzz, slow
     assert.ok(c.stats.failures / c.stats.steps < 1e-4, `${key} ${JSON.stringify(st)}: ${c.stats.failures} Newton failures`);
   }
 });
+
+// ---------------------------------------------------------------- time-based pedals
+
+// Feed a short tone burst and return the times (ms) of the loud peaks in the output.
+function echoTimes(def, st, seconds) {
+  const fs = 48000;
+  const c = new Circuit(buildNetlist(def, st), fs);
+  const out = [];
+  const burst = (i) => (i >= 100 && i < 100 + fs * 0.004 ? 0.5 * Math.sin(2 * Math.PI * 500 * (i - 100) / fs) : 0);
+  for (let i = 0; i < fs * seconds; i++) out.push(c.step(burst(i)));
+  const base = out[90];
+  const env = out.map((y) => Math.abs(y - base));
+  const peaks = [];
+  const win = Math.round(fs * 0.01);
+  const thr = 0.05 * Math.max(...env);
+  for (let i = 200; i < env.length - win; i++) {
+    const t = ((i - 100) / fs) * 1000;
+    // the BBD's sample-and-hold makes flat tops, so keep one peak per 10 ms
+    if (env[i] > thr && env.slice(i - win, i + win).every((v) => v <= env[i]) && !(peaks.length && t - peaks[peaks.length - 1] < 10)) peaks.push(t);
+  }
+  return { peaks, failures: c.stats.failures };
+}
+
+test('Analog Delay: echo arrives at stages / (2 · clock) and repeats', async () => {
+  const { bbdDelay, BBD_MODELS } = await import('../js/engine.js');
+  const def = pedalByKey('echo');
+  const st = { knobs: { VR1: 0.5, VR2: 0.85 } };
+  const net = buildNetlist(def, st);
+  const c = new Circuit(net, FS);
+  const bbd = net.elements.find((e) => e.type === 'BBD');
+  const expected = bbdDelay(bbd.model, c.nodeVoltage(bbd.nodes[2])) * 1000;
+  const { peaks, failures } = echoTimes(def, st, 0.5);
+  assert.equal(failures, 0);
+  assert.ok(peaks.length >= 3, `expected the dry hit plus repeats, got ${peaks.map((t) => t.toFixed(1))}`);
+  const gap1 = peaks[1] - peaks[0], gap2 = peaks[2] - peaks[1];
+  assert.ok(Math.abs(gap1 - expected) < 1.5, `first echo after ${gap1.toFixed(1)} ms, expected ${expected.toFixed(1)} ms`);
+  // U1 inverts every pass, so the loudest cycle of the 500 Hz burst can move by one period (2 ms)
+  assert.ok(Math.abs(gap2 - expected) < 2.5, `second echo after ${gap2.toFixed(1)} ms`);
+  assert.equal(BBD_MODELS.MN3005.stages, 4096);
+});
+
+test('Analog Delay: Time knob spans roughly 20–300 ms', async () => {
+  const { bbdDelay } = await import('../js/engine.js');
+  const def = pedalByKey('echo');
+  const ms = (pos) => {
+    const net = buildNetlist(def, { knobs: { VR1: pos } });
+    const c = new Circuit(net, FS);
+    const b = net.elements.find((e) => e.type === 'BBD');
+    return bbdDelay(b.model, c.nodeVoltage(b.nodes[2])) * 1000;
+  };
+  const short = ms(0), long = ms(1);
+  assert.ok(short > 15 && short < 30, 'shortest ' + short);
+  assert.ok(long > 250 && long < 350, 'longest ' + long);
+  assert.ok(ms(0.5) > short && ms(0.5) < long);
+});
+
+test('Analog Delay: Repeat at max with a smaller R5 self-oscillates but stays bounded', () => {
+  const def = pedalByKey('echo');
+  const c = new Circuit(buildNetlist(def, { knobs: { VR1: 0.2, VR2: 1 }, values: { R5: 22e3 } }), FS);
+  let late = 0;
+  for (let i = 0; i < FS * 1.5; i++) {
+    const y = c.step(i < 200 ? 0.3 * Math.sin(i / 5) : 0);
+    assert.ok(Number.isFinite(y) && Math.abs(y) < 9);
+    if (i > FS) late = Math.max(late, Math.abs(y - 4.5));
+  }
+  assert.ok(late > 0.05, 'runaway repeats should still be ringing after 1 s: ' + late);
+});
+
+test('Chorus: LFO rate follows R6 / (4 · R5 · (R7 + Rate) · C4)', () => {
+  const def = pedalByKey('chorus');
+  for (const [pos, c4] of [[0.4, 1e-6], [0.9, 470e-9]]) {
+    const st = { knobs: { VR1: pos }, values: { C4: c4 } };
+    const net = buildNetlist(def, st);
+    const c = new Circuit(net, FS);
+    const tri = net.pinNodes.U2[2];
+    const cross = [];
+    let prev = c.nodeVoltage(tri);
+    for (let i = 0; i < FS * 5; i++) {
+      c.step(0);
+      const v = c.nodeVoltage(tri);
+      if (prev < 4.5 && v >= 4.5) cross.push(i);
+      prev = v;
+    }
+    const per = cross.slice(1).map((v, i) => v - cross[i]);
+    const f = FS / (per.reduce((a, b) => a + b, 0) / per.length);
+    // Rate is a rheostat: R = 1M · (1 − taper(pos))
+    const tap = (Math.pow(81, pos) - 1) / 80;
+    const expected = 22e3 / (4 * 10e3 * (47e3 + 1e6 * (1 - tap)) * c4);
+    assert.ok(Math.abs(f / expected - 1) < 0.03, `LFO ${f.toFixed(3)} Hz vs ${expected.toFixed(3)} Hz`);
+    assert.equal(c.stats.failures, 0);
+  }
+});
+
+test('Chorus: delay sweeps a few milliseconds around ~4 ms', async () => {
+  const { bbdDelay } = await import('../js/engine.js');
+  const def = pedalByKey('chorus');
+  const net = buildNetlist(def, { knobs: { VR1: 0.9, VR2: 1 } });
+  const c = new Circuit(net, FS);
+  const b = net.elements.find((e) => e.type === 'BBD');
+  let lo = Infinity, hi = 0;
+  for (let i = 0; i < FS * 2; i++) {
+    c.step(0);
+    if (i > FS / 2) {
+      const d = bbdDelay(b.model, c.nodeVoltage(b.nodes[2])) * 1000;
+      lo = Math.min(lo, d); hi = Math.max(hi, d);
+    }
+  }
+  assert.ok(lo > 2 && lo < 4.5 && hi > 6 && hi < 10, `sweep ${lo.toFixed(2)}–${hi.toFixed(2)} ms`);
+});
