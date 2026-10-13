@@ -15,6 +15,9 @@ Four circuits to start from:
 | Screamer | Ibanez TS808 clipping stage | D1/D2 → LEDs or germanium; R3/C2 move the mid hump |
 | Rodent | ProCo RAT | the op-amp chip (slew rate!), R2/R3 gain legs, clipping diodes |
 
+They are "-style" circuits: the stages that shape the sound, without the input
+and output buffers.
+
 ## Playing your guitar through it
 
 Live input is the default source. Plug your guitar into an audio interface
@@ -36,9 +39,6 @@ Live input is the default source. Plug your guitar into an audio interface
 Browsers can't use ASIO, so expect roughly 10–30 ms on Windows (WASAPI) and less
 on macOS. Setting the interface to 48 kHz with a small buffer in its own control
 panel helps. Live input needs https or localhost; GitHub Pages is https.
-
-They are "-style" circuits: the stages that shape the sound, without the input
-and output buffers.
 
 ## How it works
 
