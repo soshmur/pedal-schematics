@@ -15,6 +15,28 @@ Four circuits to start from:
 | Screamer | Ibanez TS808 clipping stage | D1/D2 → LEDs or germanium; R3/C2 move the mid hump |
 | Rodent | ProCo RAT | the op-amp chip (slew rate!), R2/R3 gain legs, clipping diodes |
 
+## Playing your guitar through it
+
+Live input is the default source. Plug your guitar into an audio interface
+(or use any mic), press **Start** and allow microphone access.
+
+- **Input device / Channel** — pick your interface and which of its inputs the
+  guitar is on (most 2-in interfaces put the instrument jack on Input 1).
+- **Input level** — aim for peaks around −12 dBFS on the meter. If it says
+  CLIP, turn the gain down on the interface itself.
+- **Pickup level** — how many volts a full-scale digital signal stands for.
+  Real pickups give roughly 0.1–1 V peak, so this decides how hard you hit the
+  circuit, like a hotter or weaker pickup.
+- **Latency: Lowest** asks the browser for its smallest buffer. If you hear
+  clicks, switch to **Stable**. The note under the meter shows the delay the
+  browser reports.
+- **Output device** — send the result to your interface's outputs (Chrome and
+  Edge). Use headphones: speakers next to a mic will feed back.
+
+Browsers can't use ASIO, so expect roughly 10–30 ms on Windows (WASAPI) and less
+on macOS. Setting the interface to 48 kHz with a small buffer in its own control
+panel helps. Live input needs https or localhost; GitHub Pages is https.
+
 They are "-style" circuits: the stages that shape the sound, without the input
 and output buffers.
 

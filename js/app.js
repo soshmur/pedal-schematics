@@ -98,6 +98,9 @@ audio.onStats = (s) => {
     audio.setOversample(1);
     status.textContent = 'Switched to 1× oversampling: 2× was too heavy for this device.';
     status.className = 'status warn';
+  } else if (s.load > 0.85 && audio.latencyMode === 'lowest') {
+    status.textContent = 'The simulation is close to its time limit, so you may hear clicks. Set Latency to Stable.';
+    status.className = 'status warn';
   } else {
     const rate = Math.round(audio.ctx.sampleRate * s.os / 1000);
     status.textContent = `Simulating at ${rate} kHz, ${s.itsPerSample.toFixed(1)} Newton iterations per sample, ${Math.round(s.load * 100)}% CPU.`;
@@ -108,36 +111,151 @@ audio.onStats = (s) => {
 if (matchMedia('(pointer: coarse)').matches) document.querySelector('input[name="os"][value="1"]').checked = true;
 const osFactor = () => parseInt(document.querySelector('input[name="os"]:checked').value, 10);
 const inputVolts = () => Math.pow(10, parseFloat($('#inLevel').value) / 20);
+const monitorGain = () => Math.pow(10, parseFloat($('#outLevel').value) / 20);
 
 function showLevels() {
   $('#inLevelOut').textContent = `${inputVolts().toFixed(2)} V`;
   $('#outLevelOut').textContent = `${$('#outLevel').value} dB`;
 }
 
+// ---- live input settings (remembered per browser)
+
+const AUDIO_KEY = 'pedal-schematics-audio';
+function saveAudioPrefs() {
+  try {
+    localStorage.setItem(AUDIO_KEY, JSON.stringify({
+      source: $('#source').value === 'file' ? 'live' : $('#source').value,
+      inputId: audio.inputId, outputId: audio.outputId, channel: audio.channel, latency: audio.latencyMode,
+      inLevel: $('#inLevel').value, outLevel: $('#outLevel').value,
+    }));
+  } catch { /* storage unavailable */ }
+}
+function loadAudioPrefs() {
+  let p = null;
+  try { p = JSON.parse(localStorage.getItem(AUDIO_KEY) || 'null'); } catch { /* ignore */ }
+  if (!p) return;
+  if (p.source && $(`#source option[value="${p.source}"]`)) $('#source').value = p.source;
+  audio.inputId = p.inputId || '';
+  audio.outputId = p.outputId || '';
+  audio.channel = p.channel || '0';
+  audio.latencyMode = p.latency || 'lowest';
+  if (p.inLevel) $('#inLevel').value = p.inLevel;
+  if (p.outLevel) $('#outLevel').value = p.outLevel;
+  $('#inChannel').value = audio.channel;
+  $('#latency').value = audio.latencyMode;
+}
+
+function fillSelect(sel, devices, fallback, current) {
+  const opts = [`<option value="">${fallback}</option>`];
+  devices.forEach((d, i) => opts.push(`<option value="${esc(d.deviceId)}">${esc(d.label || `${fallback.replace('Default ', '')} ${i + 1}`)}</option>`));
+  sel.innerHTML = opts.join('');
+  sel.value = devices.some((d) => d.deviceId === current) ? current : '';
+}
+
+async function refreshDevices() {
+  const { inputs, outputs } = await AudioEngine.devices();
+  fillSelect($('#inDevice'), inputs, 'Default input', audio.inputId);
+  fillSelect($('#outDevice'), outputs, 'Default output', audio.outputId);
+  $('#outPick').hidden = !AudioEngine.outputSelectable || outputs.length === 0;
+}
+
+function showLiveUI() {
+  const live = $('#source').value === 'live';
+  $('#live').hidden = !live;
+  if (!audio.playing) $('#play').textContent = live ? 'Start' : 'Play';
+}
+
+function showLatency() {
+  const l = audio.latencyMs();
+  const note = $('#liveNote');
+  if (!l || audio.kind !== 'live' || !audio.playing) {
+    note.textContent = 'Use headphones or your interface’s outputs. Speakers near a microphone will feed back.';
+    return;
+  }
+  const chans = audio.streamChannels >= 2 ? '' : ' Mono device, so the channel setting has no effect.';
+  note.textContent = `About ${Math.round(l.total)} ms from input to output${l.reported ? '' : ' (plus what the browser doesn’t report)'}, at ${audio.ctx.sampleRate / 1000} kHz.${chans}`;
+}
+
+function liveError(err) {
+  const status = $('#status');
+  status.className = 'status warn';
+  if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+    status.textContent = 'Microphone access is blocked. Allow it for this site in the browser’s address bar, then press Start.';
+  } else if (err.name === 'NotFoundError') {
+    status.textContent = 'No audio input found. Plug in your interface or mic, then press Start.';
+  } else if (err.name === 'NotReadableError') {
+    status.textContent = 'The input is busy in another app (a DAW or call). Close it there, then press Start.';
+  } else if (err.name === 'NotSupportedError') {
+    status.textContent = 'Live input needs the page to be served over https or from localhost.';
+  } else {
+    status.textContent = `Couldn’t open the input: ${err.message}`;
+  }
+}
+
 async function startPlayback(kind) {
   try {
     await audio.play(kind);
     audio.setInputVolts(inputVolts());
-    audio.setOutputGain(Math.pow(10, parseFloat($('#outLevel').value) / 20));
+    audio.setOutputGain(monitorGain());
     audio.setOversample(osFactor());
     audio.setBypass(state.bypass);
     audio.setNetlist(state.net);
     $('#play').setAttribute('aria-pressed', 'true');
     $('#play').textContent = 'Stop';
+    if (kind === 'live') {
+      // labels only appear once permission is granted
+      await refreshDevices();
+      setTimeout(showLatency, 300);
+    }
+    saveAudioPrefs();
     scopeLoop();
   } catch (err) {
-    const status = $('#status');
-    status.className = 'status warn';
-    status.textContent = kind === 'mic'
-      ? 'No input. Allow microphone access for this site in your browser settings, then press Play.'
-      : `Couldn’t start audio: ${err.message}`;
+    stopPlayback();
+    if (kind === 'live') liveError(err);
+    else {
+      $('#status').className = 'status warn';
+      $('#status').textContent = `Couldn’t start audio: ${err.message}`;
+    }
   }
 }
 
 function stopPlayback() {
   audio.stop();
   $('#play').setAttribute('aria-pressed', 'false');
-  $('#play').textContent = 'Play';
+  showLiveUI();
+  setMeter(null);
+  showLatency();
+}
+audio.onEnded = () => {
+  if (audio.kind !== 'live') return;
+  stopPlayback();
+  $('#status').className = 'status warn';
+  $('#status').textContent = 'The input device disconnected. Pick another input and press Start.';
+};
+
+// ---- input meter: peak in dBFS with a falling peak-hold marker
+
+const meter = { hold: -Infinity, holdT: 0, clipT: 0 };
+function setMeter(peak) {
+  const box = $('.meter');
+  if (peak === null) {
+    $('#meterFill').style.width = '0';
+    $('#meterPeak').style.opacity = 0;
+    $('#meterOut').textContent = 'off';
+    box.classList.remove('clip');
+    return;
+  }
+  const now = performance.now();
+  const db = peak > 1e-6 ? 20 * Math.log10(peak) : -Infinity;
+  const pos = (d) => `${Math.max(0, Math.min(100, (d + 60) / 60 * 100))}%`;
+  if (db >= meter.hold || now - meter.holdT > 1200) { meter.hold = db; meter.holdT = now; }
+  if (peak >= 0.98) meter.clipT = now;
+  const clipping = now - meter.clipT < 1500;
+  $('#meterFill').style.width = pos(db);
+  $('#meterPeak').style.left = pos(meter.hold);
+  $('#meterPeak').style.opacity = meter.hold > -60 ? 1 : 0;
+  $('#meterOut').textContent = clipping ? 'CLIP' : (meter.hold > -60 ? `${meter.hold.toFixed(0)} dBFS` : '< −60');
+  box.classList.toggle('clip', clipping);
 }
 
 let scopeRunning = false;
@@ -149,6 +267,9 @@ function scopeLoop() {
     if (!audio.playing) { scopeRunning = false; return; }
     audio.inTap.getFloatTimeDomainData(inBuf);
     audio.outTap.getFloatTimeDomainData(outBuf);
+    let peak = 0;
+    for (let i = 0; i < inBuf.length; i++) peak = Math.max(peak, Math.abs(inBuf[i]));
+    setMeter(peak);
     const v = inputVolts();
     for (let i = 0; i < inBuf.length; i++) inBuf[i] *= v;
     const { pin, pout } = drawScope($('#scope'), inBuf, outBuf);
@@ -709,6 +830,8 @@ function init() {
   });
   $('#source').addEventListener('change', (e) => {
     const src = e.target.value;
+    showLiveUI();
+    saveAudioPrefs();
     if (src === 'file') $('#file').click();
     else if (audio.playing) startPlayback(src);
   });
@@ -717,7 +840,38 @@ function init() {
     if (f) startPlayback({ file: f });
   });
   $('#inLevel').addEventListener('input', () => { showLevels(); audio.setInputVolts(inputVolts()); });
-  $('#outLevel').addEventListener('input', () => { showLevels(); audio.setOutputGain(Math.pow(10, parseFloat($('#outLevel').value) / 20)); });
+  $('#outLevel').addEventListener('input', () => { showLevels(); audio.setOutputGain(monitorGain()); });
+  for (const id of ['#inLevel', '#outLevel']) $(id).addEventListener('change', saveAudioPrefs);
+
+  $('#inDevice').addEventListener('change', async (e) => {
+    try { await audio.setInputDevice(e.target.value); } catch (err) { liveError(err); }
+    saveAudioPrefs();
+    if (audio.playing) setTimeout(showLatency, 300);
+  });
+  $('#inChannel').addEventListener('change', (e) => { audio.setChannel(e.target.value); saveAudioPrefs(); });
+  $('#outDevice').addEventListener('change', async (e) => {
+    try { await audio.setOutputDevice(e.target.value); } catch (err) {
+      $('#outDevice').value = '';
+      $('#status').className = 'status warn';
+      $('#status').textContent = `Couldn’t switch output: ${err.message}`;
+    }
+    saveAudioPrefs();
+    setTimeout(showLatency, 300);
+  });
+  $('#latency').addEventListener('change', async (e) => {
+    // the buffer size is fixed when the audio context is created, so rebuild it
+    const wasPlaying = audio.playing, kind = audio.kind;
+    audio.latencyMode = e.target.value;
+    await audio.reset();
+    saveAudioPrefs();
+    if (wasPlaying && kind !== 'file') startPlayback(kind);
+    else stopPlayback();
+  });
+  navigator.mediaDevices?.addEventListener?.('devicechange', refreshDevices);
+  loadAudioPrefs();
+  showLevels();
+  showLiveUI();
+  refreshDevices();
   for (const r of document.querySelectorAll('input[name="os"]')) {
     r.addEventListener('change', () => audio.setOversample(osFactor()));
   }

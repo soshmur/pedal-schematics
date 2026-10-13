@@ -31,16 +31,51 @@
 
       <div class="transport">
         <div class="play-row">
-          <button class="play" id="play" aria-pressed="false">Play</button>
+          <button class="play" id="play" aria-pressed="false">Start</button>
           <select id="source" aria-label="Input signal">
-            <option value="pentatonic">A minor pentatonic riff</option>
-            <option value="chords">Open chord strums</option>
-            <option value="single">Sustained low E</option>
-            <option value="mic">Guitar / microphone input</option>
+            <option value="live">Live input (guitar or mic)</option>
+            <optgroup label="Demo clips">
+              <option value="pentatonic">A minor pentatonic riff</option>
+              <option value="chords">Open chord strums</option>
+              <option value="single">Sustained low E</option>
+            </optgroup>
             <option value="file">Audio file…</option>
           </select>
           <input type="file" id="file" accept="audio/*" hidden>
         </div>
+
+        <div class="live" id="live">
+          <label class="pick pick-wide">
+            <span>Input device</span>
+            <select id="inDevice"><option value="">Default input</option></select>
+          </label>
+          <label class="pick">
+            <span>Channel</span>
+            <select id="inChannel">
+              <option value="0">Input 1</option>
+              <option value="1">Input 2</option>
+              <option value="mix">Both</option>
+            </select>
+          </label>
+          <label class="pick">
+            <span>Latency</span>
+            <select id="latency">
+              <option value="lowest">Lowest</option>
+              <option value="stable">Stable</option>
+            </select>
+          </label>
+          <label class="pick pick-wide" id="outPick">
+            <span>Output device</span>
+            <select id="outDevice"><option value="">Default output</option></select>
+          </label>
+          <div class="meter pick-wide">
+            <span>Input level</span>
+            <div class="meter-bar" aria-hidden="true"><i id="meterFill"></i><b id="meterPeak"></b></div>
+            <output id="meterOut">off</output>
+          </div>
+          <p class="note pick-wide" id="liveNote">Use headphones or your interface’s outputs. Speakers near a microphone will feed back.</p>
+        </div>
+
         <label class="fader">
           <span>Pickup level</span>
           <input type="range" id="inLevel" min="-30" max="12" step="0.5" value="-8">

@@ -526,3 +526,54 @@ fieldset { border: 0; padding: 0; margin: 12px 0 0; }
 @media (min-width: 861px) {
   body.editing .layout { padding-right: 380px; }
 }
+
+/* ---------------------------------------------------------------- live input */
+
+.live {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 10px;
+  padding: 10px 0 4px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.live[hidden] { display: none; }
+.pick { display: grid; gap: 3px; font-size: 13px; min-width: 0; }
+.pick > span { color: var(--muted); }
+.pick select { width: 100%; padding: 6px 8px; font-size: 14px; }
+.pick-wide { grid-column: 1 / -1; }
+.pick[hidden] { display: none; }
+
+.meter { display: grid; grid-template-columns: 84px 1fr 64px; align-items: center; gap: 8px; font-size: 13px; }
+.meter > span { color: var(--muted); }
+.meter output { text-align: right; }
+.meter-bar {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+/* scale: -60 dBFS at the left, 0 dBFS at the right; the band past -6 dBFS is the danger zone */
+.meter-bar::after {
+  content: "";
+  position: absolute;
+  left: 90%; top: 0; bottom: 0; right: 0;
+  background: color-mix(in srgb, var(--changed) 22%, transparent);
+}
+.meter-bar i {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 0;
+  background: var(--accent);
+}
+.meter-bar b {
+  position: absolute; top: 0; bottom: 0;
+  width: 2px;
+  left: 0;
+  background: var(--ink);
+  opacity: 0;
+}
+.meter.clip .meter-bar i { background: #d0342c; }
+.meter.clip output { color: #d0342c; font-weight: 700; }
+.live .note { margin: 0; }
