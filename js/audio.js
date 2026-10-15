@@ -158,6 +158,7 @@ export class AudioEngine {
 
   /** Start a source: 'live', a demo clip key, or { file: File }. */
   async play(kind = this.kind) {
+    if (kind === 'mic') kind = 'live';   // older pages called live input 'mic'
     this.kind = typeof kind === 'string' ? kind : 'file';
     if (kind === 'live') {
       if (!AudioEngine.liveSupported) throw Object.assign(new Error('insecure'), { name: 'NotSupportedError' });

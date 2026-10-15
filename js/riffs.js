@@ -94,7 +94,7 @@ export const RIFFS = {
 /** Render a clip normalised to a peak of 1.0. */
 export function renderRiff(key, fs) {
   seed = 12345;
-  const out = RIFFS[key].render(fs);
+  const out = (RIFFS[key] || RIFFS.pentatonic).render(fs);
   let peak = 0;
   for (const v of out) peak = Math.max(peak, Math.abs(v));
   if (peak > 0) for (let i = 0; i < out.length; i++) out[i] /= peak;

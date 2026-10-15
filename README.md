@@ -80,7 +80,7 @@ LTspice or ngspice.
 No build step and no dependencies. ES modules need to be served over HTTP:
 
 ```sh
-npm start            # python3 -m http.server 8000
+npm start            # http://localhost:8000
 # open http://localhost:8000
 ```
 
