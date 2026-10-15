@@ -98,8 +98,8 @@ audio.onStats = (s) => {
     audio.setOversample(1);
     status.textContent = 'Switched to 1× oversampling: 2× was too heavy for this device.';
     status.className = 'status warn';
-  } else if (s.load > 0.85 && audio.latencyMode === 'lowest') {
-    status.textContent = 'The simulation is close to its time limit, so you may hear clicks. Set Latency to Stable.';
+  } else if (s.load > 0.85) {
+    status.textContent = 'The simulation is close to its time limit, so you may hear clicks. Try 1× oversampling.';
     status.className = 'status warn';
   } else {
     const rate = Math.round(audio.ctx.sampleRate * s.os / 1000);
@@ -125,7 +125,6 @@ function saveAudioPrefs() {
   try {
     localStorage.setItem(AUDIO_KEY, JSON.stringify({
       source: $('#source').value === 'file' ? 'live' : $('#source').value,
-      inputId: audio.inputId, outputId: audio.outputId, channel: audio.channel, latency: audio.latencyMode,
       inLevel: $('#inLevel').value, outLevel: $('#outLevel').value,
     }));
   } catch { /* storage unavailable */ }
@@ -135,45 +134,14 @@ function loadAudioPrefs() {
   try { p = JSON.parse(localStorage.getItem(AUDIO_KEY) || 'null'); } catch { /* ignore */ }
   if (!p) return;
   if (p.source && $(`#source option[value="${p.source}"]`)) $('#source').value = p.source;
-  audio.inputId = p.inputId || '';
-  audio.outputId = p.outputId || '';
-  audio.channel = p.channel || '0';
-  audio.latencyMode = p.latency || 'lowest';
   if (p.inLevel) $('#inLevel').value = p.inLevel;
   if (p.outLevel) $('#outLevel').value = p.outLevel;
-  $('#inChannel').value = audio.channel;
-  $('#latency').value = audio.latencyMode;
-}
-
-function fillSelect(sel, devices, fallback, current) {
-  const opts = [`<option value="">${fallback}</option>`];
-  devices.forEach((d, i) => opts.push(`<option value="${esc(d.deviceId)}">${esc(d.label || `${fallback.replace('Default ', '')} ${i + 1}`)}</option>`));
-  sel.innerHTML = opts.join('');
-  sel.value = devices.some((d) => d.deviceId === current) ? current : '';
-}
-
-async function refreshDevices() {
-  const { inputs, outputs } = await AudioEngine.devices();
-  fillSelect($('#inDevice'), inputs, 'Default input', audio.inputId);
-  fillSelect($('#outDevice'), outputs, 'Default output', audio.outputId);
-  $('#outPick').hidden = !AudioEngine.outputSelectable || outputs.length === 0;
 }
 
 function showLiveUI() {
   const live = $('#source').value === 'live';
   $('#live').hidden = !live;
   if (!audio.playing) $('#play').textContent = live ? 'Start' : 'Play';
-}
-
-function showLatency() {
-  const l = audio.latencyMs();
-  const note = $('#liveNote');
-  if (!l || audio.kind !== 'live' || !audio.playing) {
-    note.textContent = 'Use headphones or your interface’s outputs. Speakers near a microphone will feed back.';
-    return;
-  }
-  const chans = audio.streamChannels >= 2 ? '' : ' Mono device, so the channel setting has no effect.';
-  note.textContent = `About ${Math.round(l.total)} ms from input to output${l.reported ? '' : ' (plus what the browser doesn’t report)'}, at ${audio.ctx.sampleRate / 1000} kHz.${chans}`;
 }
 
 function liveError(err) {
@@ -202,11 +170,6 @@ async function startPlayback(kind) {
     audio.setNetlist(state.net);
     $('#play').setAttribute('aria-pressed', 'true');
     $('#play').textContent = 'Stop';
-    if (kind === 'live') {
-      // labels only appear once permission is granted
-      await refreshDevices();
-      setTimeout(showLatency, 300);
-    }
     saveAudioPrefs();
     scopeLoop();
   } catch (err) {
@@ -224,7 +187,6 @@ function stopPlayback() {
   $('#play').setAttribute('aria-pressed', 'false');
   showLiveUI();
   setMeter(null);
-  showLatency();
 }
 audio.onEnded = () => {
   if (audio.kind !== 'live') return;
@@ -876,35 +838,9 @@ function init() {
   $('#outLevel').addEventListener('input', () => { showLevels(); audio.setOutputGain(monitorGain()); });
   for (const id of ['#inLevel', '#outLevel']) $(id).addEventListener('change', saveAudioPrefs);
 
-  $('#inDevice').addEventListener('change', async (e) => {
-    try { await audio.setInputDevice(e.target.value); } catch (err) { liveError(err); }
-    saveAudioPrefs();
-    if (audio.playing) setTimeout(showLatency, 300);
-  });
-  $('#inChannel').addEventListener('change', (e) => { audio.setChannel(e.target.value); saveAudioPrefs(); });
-  $('#outDevice').addEventListener('change', async (e) => {
-    try { await audio.setOutputDevice(e.target.value); } catch (err) {
-      $('#outDevice').value = '';
-      $('#status').className = 'status warn';
-      $('#status').textContent = `Couldn’t switch output: ${err.message}`;
-    }
-    saveAudioPrefs();
-    setTimeout(showLatency, 300);
-  });
-  $('#latency').addEventListener('change', async (e) => {
-    // the buffer size is fixed when the audio context is created, so rebuild it
-    const wasPlaying = audio.playing, kind = audio.kind;
-    audio.latencyMode = e.target.value;
-    await audio.reset();
-    saveAudioPrefs();
-    if (wasPlaying && kind !== 'file') startPlayback(kind);
-    else stopPlayback();
-  });
-  navigator.mediaDevices?.addEventListener?.('devicechange', refreshDevices);
   loadAudioPrefs();
   showLevels();
   showLiveUI();
-  refreshDevices();
   for (const r of document.querySelectorAll('input[name="os"]')) {
     r.addEventListener('change', () => audio.setOversample(osFactor()));
   }

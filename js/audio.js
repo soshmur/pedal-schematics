@@ -17,7 +17,7 @@ export class AudioEngine {
     // live-input settings
     this.inputId = '';
     this.outputId = '';
-    this.channel = '0';        // '0' = input 1 / left, '1' = input 2 / right, 'mix' = both
+    this.channel = 'mix';      // '0' = input 1 / left, '1' = input 2 / right, 'mix' = both
     this.latencyMode = 'lowest'; // 'lowest' | 'stable'
     this.stream = null;
     this.streamChannels = 0;
@@ -143,13 +143,15 @@ export class AudioEngine {
     this.picker = null;
     const src = this.source;
     const ch = this.channel;
-    if (this.streamChannels >= 2 && ch !== 'mix') {
+    if (this.streamChannels >= 2) {
+      // stereo interface: one input, or both summed at full level, so a guitar on
+      // either jack arrives at the same level (the other input is silent)
       const split = this.ctx.createChannelSplitter(2);
       src.connect(split);
-      split.connect(this.input, parseInt(ch, 10));
+      if (ch === 'mix') { split.connect(this.input, 0); split.connect(this.input, 1); }
+      else split.connect(this.input, parseInt(ch, 10));
       this.picker = [split];
     } else {
-      // mono device, or "both": the input node sums to mono
       src.connect(this.input);
     }
   }
