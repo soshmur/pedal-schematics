@@ -75,7 +75,7 @@ for pid in ids:
     d = {'id':pid,'type':t,'value':val+('Ω' if t=='R' and not val[-1].isalpha() else ''),'pins':pins,'cells':cs,'nets':nets,
          'kind':KIND[t],'job':JOB[pid][0],'short':JOB[pid][1],'tip':TIP[t]}
     if t=='R': d['value'] = val.replace('k','k')
-    if t=='E': d['pinNames'] = ['+ leg','− leg']
+    if t=='E': d['pinNames'] = ['+ leg','− leg']; d['cells'] = pins
     if t=='D': d['pinNames'] = ['anode','cathode (stripe)']
     if t=='Q':
         d['pinNames'] = ['E','C','B']

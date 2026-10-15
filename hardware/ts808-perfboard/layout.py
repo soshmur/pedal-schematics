@@ -1,6 +1,6 @@
 import json, heapq, sys
 W, H = 18, 24
-LEN = {'R':6,'C':4,'E':3,'D':3,'Q':3}
+LEN = {'R':6,'C':4,'E':2,'D':4,'Q':3}
 
 # ---- circuit: part -> pin nets -------------------------------------------
 # film caps 'C', electrolytic 'E' (pin1 = +), diode 'D' (pin1 = anode, pin2 = cathode)

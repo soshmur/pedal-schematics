@@ -75,7 +75,7 @@ ol.steps { padding-left: 20px; margin: 0; display: grid; gap: 8px; max-width: 75
   <h1>TS808 Perfboard Layout</h1>
   <p>Full Tube Screamer: input buffer, clipping stage, tone stage and output buffer on an 18 × 24 hole perfboard. Drive, Tone and Level pots are wired off the board. Click any part to see what it connects to.</p>
   <div class="spec">
-    <span>18 × 24 holes</span><span>resistor 6 holes</span><span>film cap 4</span><span>electrolytic 3</span><span>diode 3</span><span>transistor 3</span><span>DIP-8 socket</span>
+    <span>18 × 24 holes</span><span>resistor 6 holes</span><span>film cap 4</span><span>electrolytic 2</span><span>diode 4</span><span>transistor 3</span><span>DIP-8 socket</span>
   </div>
 </header>
 
@@ -201,8 +201,10 @@ function draw() {
     const [x, y] = p.pins[i]; const dim = sel && !sel.has(p.nets[i]);
     el('circle', { cx: X(x), cy: Y(y), r: 6, fill: 'var(--copper-hi)', stroke: netColor(p.nets[i]), 'stroke-width': 2.4, opacity: dim ? .25 : 1 }, parts);
   }
+  labelLayer = el('g', { 'pointer-events': 'none' }, svg);
   for (const p of DATA.parts) drawPart(p, parts, back, sel);
 }
+let labelLayer = null;
 
 function drawPart(p, root, back, sel) {
   const isSel = selected && selected.id === p.id;
@@ -217,7 +219,7 @@ function drawPart(p, root, back, sel) {
   const hl = isSel ? 'var(--accent)' : 'none';
   const lead = (s) => el('line', { x1: X(a[0]), y1: Y(a[1]), x2: X(b[0]), y2: Y(b[1]), stroke: '#8d8d8d', 'stroke-width': 2.2 }, g);
   const label = (txt, cx, cy, col = 'var(--ink)', size = 10) => {
-    const t = el('text', { x: cx, y: cy, 'font-size': size, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: col, 'font-weight': 600, 'paint-order': 'stroke', stroke: 'var(--board)', 'stroke-width': 3 }, g);
+    const t = el('text', { x: cx, y: cy, 'font-size': size, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: col, 'font-weight': 600, 'paint-order': 'stroke', stroke: 'var(--board)', 'stroke-width': 3, opacity: g.getAttribute('opacity') }, labelLayer);
     t.textContent = txt; return t;
   };
   const midx = (x0 + x1) / 2, midy = (y0 + y1) / 2;

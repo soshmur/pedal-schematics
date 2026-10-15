@@ -26,6 +26,10 @@ def cells(pid, p):
         # takes the row of holes behind the legs
         bx, by = qback(d)
         cs = cs + [(c[0]+bx, c[1]+by) for c in cs]
+    if t == 'E':
+        # the round can overhangs one row either side of the two leads
+        px, py = (0,1) if d[0]=='h' else (1,0)
+        cs = cs + [(c[0]+px*k, c[1]+py*k) for c in pins for k in (-1,1)]
     return pins, cs
 def qface(d):
     return {'h':(0,1), 'h-':(0,-1), 'v':(-1,0), 'v-':(1,0)}[d]
@@ -47,8 +51,7 @@ def cost(P):
     for pid in ids:
         pins, cs = cells(pid, P[pid])
         for c in cs:
-            # keep one free hole around film caps' and resistors' bodies? only count overlaps
-            if c in occ: over += 1
+            if c in occ or not (0<=c[0]<W and 0<=c[1]<H): over += 1
             occ[c] = 1
         for net, c in zip(netlist(pid), pins):
             pinpos.setdefault(net, []).append(c)

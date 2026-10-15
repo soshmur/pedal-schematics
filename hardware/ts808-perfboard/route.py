@@ -6,7 +6,7 @@ def build(P):
     for pid in ids:
         pins, cs = cells(pid, P[pid])
         for c in cs:
-            if c in occ or c in body: over += 1
+            if c in occ or c in body or not (0<=c[0]<W and 0<=c[1]<H): over += 1
         for net, c in zip(netlist(pid), pins):
             occ[c] = net; terms.setdefault(net, []).append(c)
         for c in cs:
