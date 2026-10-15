@@ -23,13 +23,16 @@ PARTS = {
  'R14':('R','10k',  ['OUT','GND']),
  'R15':('R','10k',  ['V9','VB']),
  'R16':('R','10k',  ['VB','GND']),
+ 'R17':('R','1k',   ['VC','VH']),
+ 'R18':('R','1M',   ['IN','GND']),
  'C1': ('C','22n',  ['IN','n1']),
  'C2': ('C','1µ',   ['E1','P3']),
  'C3': ('C','47n',  ['n4','GND']),
  'C4': ('C','51p',  ['P1','P2']),
  'C5': ('C','220n', ['P5','GND']),
  'C6': ('C','220n', ['n9','GND']),
- 'C7': ('C','1µ',   ['P7','VH']),
+ 'C7': ('C','1µ',   ['P7','VC']),
+ 'C11': ('C','100n', ['VW','B2']),
  'C8': ('E','10µ',  ['n13','OUT']),
  'C9': ('E','47µ',  ['VB','GND']),
  'C10':('E','100µ', ['V9','GND']),
@@ -45,7 +48,7 @@ PADS = {  # off-board wire pads: id -> (net, label)
  'IN':('IN','Input'), '9V':('VIN','+9V'), 'G':('GND','Ground'), 'OUT':('OUT','Output'),
  'D1p':('DRV','Drive lug 1'), 'D2p':('P1','Drive lug 2'),
  'T1':('P5','Tone lug 1'), 'T2':('TW','Tone lug 2'), 'T3':('P6','Tone lug 3'),
- 'V3':('VH','Volume lug 3'), 'V2':('B2','Volume lug 2'), 'V1':('VB','Volume lug 1'),
+ 'V3':('VH','Volume lug 3'), 'V2':('VW','Volume lug 2'), 'V1':('GND','Volume lug 1'),
 }
 
 # ---- placement -----------------------------------------------------------

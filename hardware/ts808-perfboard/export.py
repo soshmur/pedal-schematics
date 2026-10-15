@@ -22,7 +22,7 @@ NETINFO = {
  'IN':'input jack', 'n1':'C1 → R1', 'B1':'Q1 base', 'E1':'Q1 emitter (buffered input)',
  'P3':'op-amp pin 3 (+A)', 'P2':'op-amp pin 2 (−A)', 'P1':'op-amp pin 1 (clipped output)', 'n4':'R4 → C3',
  'DRV':'R6 → Drive pot', 'P5':'op-amp pin 5 (+B)', 'P6':'op-amp pin 6 (−B)', 'P7':'op-amp pin 7 (tone output)',
- 'TW':'Tone pot wiper', 'n9':'R9 → C6', 'VH':'C7 → Level pot', 'B2':'Q2 base (Level wiper)',
+ 'TW':'Tone pot wiper', 'n9':'R9 → C6', 'VC':'C7 → R17', 'VH':'R17 → Level pot lug 3', 'VW':'Level pot wiper → C11', 'B2':'Q2 base',
  'E2':'Q2 emitter', 'n13':'R13 → C8', 'OUT':'output jack',
 }
 JOB = {
@@ -31,13 +31,16 @@ JOB = {
  'R5':('Biases op-amp pin 3 at 4.5 V','Pin 3 bias'), 'R6':('Minimum gain; in series with the Drive pot','Drive min'),
  'R7':('With C5, the fixed treble cut after clipping','Treble cut'), 'R8':('Biases op-amp pin 5','Pin 5 bias'),
  'R9':('Tone network with C6','Tone'), 'R10':('Tone stage feedback','Tone feedback'),
- 'R11':('Keeps Q2 biased if the Level wiper lifts','Q2 bias'), 'R12':('Q2 emitter load','Q2 emitter'),
+ 'R11':('Biases Q2 base at 4.5 V','Q2 bias'),
+ 'R17':('Series resistor into the Level pot','Level feed'),
+ 'R18':('Input pulldown, stops the pop when you switch the pedal on','Pulldown'),
+ 'C11':('Couples the Level pot wiper into Q2','Coupling'), 'R12':('Q2 emitter load','Q2 emitter'),
  'R13':('Output series resistor','Output'), 'R14':('Output pulldown, stops pops','Output pulldown'),
  'R15':('Top half of the 4.5 V divider','Bias divider'), 'R16':('Bottom half of the 4.5 V divider','Bias divider'),
  'C1':('Input coupling cap (0.02 µF in the original)','Input cap'), 'C2':('Couples the buffer into the op-amp','Coupling'),
  'C3':('With R4 sets the mid hump (~720 Hz)','Gain leg'), 'C4':('Treble cut in the clipping loop; keeps high drive smooth','Feedback cap'),
  'C5':('With R7, the fixed treble cut','Treble cut'), 'C6':('Tone network with R9','Tone'),
- 'C7':('Couples tone stage to the Level pot','Coupling'), 'C8':('Output coupling, + toward R13','Output cap'),
+ 'C7':('Couples the tone stage towards the Level pot (+ toward the op-amp if electrolytic)','Coupling'), 'C8':('Output coupling, + toward R13','Output cap'),
  'C9':('Smooths the 4.5 V bias','Bias filter'), 'C10':('Supply filter','Supply filter'),
  'D1':('Clipping diode','Clipping'), 'D2':('Clipping diode, the other way round','Clipping'),
  'D3':('Reverse-polarity protection','Protection'), 'Q1':('Input buffer (emitter follower)','Input buffer'),
@@ -55,7 +58,7 @@ PADTXT = {
  'G':('GND','Ground: DC jack centre pin (−), input and output jack sleeves'), 'OUT':('OUT','Output jack tip'),
  'D1p':('DRV 1','Drive pot (500k) lug 1'), 'D2p':('DRV 2','Drive pot lug 2 (wiper). Leave lug 3 unconnected or tie it to lug 2'),
  'T1':('TONE 1','Tone pot (20k B) lug 1'), 'T2':('TONE 2','Tone pot lug 2 (wiper)'), 'T3':('TONE 3','Tone pot lug 3'),
- 'V3':('LVL 3','Level pot (100k A) lug 3'), 'V2':('LVL 2','Level pot lug 2 (wiper)'), 'V1':('LVL 1','Level pot lug 1'),
+ 'V3':('LVL 3','Level pot (100k A) lug 3'), 'V2':('LVL 2','Level pot lug 2 (wiper)'), 'V1':('LVL 1','Level pot lug 1 (ground)'),
 }
 parts = []
 for pid in ids:
