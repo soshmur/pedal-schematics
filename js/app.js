@@ -102,7 +102,7 @@ audio.onStats = (s) => {
     status.textContent = 'The simulation is close to its time limit, so you may hear clicks. Set Latency to Stable.';
     status.className = 'status warn';
   } else {
-    const rate = Math.round((s.fs || audio.ctx.sampleRate * s.os) / 1000);
+    const rate = Math.round(audio.ctx.sampleRate * s.os / 1000);
     status.textContent = `Simulating at ${rate} kHz, ${s.itsPerSample.toFixed(1)} Newton iterations per sample, ${Math.round(s.load * 100)}% CPU.`;
     status.className = 'status';
   }

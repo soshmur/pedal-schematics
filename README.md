@@ -41,8 +41,7 @@ Live input is the default source. Plug your guitar into an audio interface
 
 Browsers can't use ASIO, so expect roughly 10–30 ms on Windows (WASAPI) and less
 on macOS. Setting the interface to 48 kHz with a small buffer in its own control
-panel helps. Higher interface rates (96/192 kHz) work too: the circuit still runs
-at 48 kHz × the oversampling setting, so they don't add CPU load. Live input needs https or localhost; GitHub Pages is https.
+panel helps. Live input needs https or localhost; GitHub Pages is https.
 
 ## How it works
 
