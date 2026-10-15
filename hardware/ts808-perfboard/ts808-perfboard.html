@@ -1,0 +1,377 @@
+<title>TS808 Perfboard Layout</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;600;800&family=Chivo+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: board drawing on the left, part inspector + lists on the right; stacks on phones */
+:root {
+  --bg: #f3efe7; --panel: #fbf8f2; --ink: #23201b; --muted: #6d665b; --line: #d9d1c3;
+  --board: #d8b77f; --board-edge: #b8935a; --hole: #5b4426; --copper: #b8692e; --copper-hi: #e0965a;
+  --accent: #1f6f8b; --warn: #b5442a; --ok: #3d7d4a;
+  --body-r: #e9d9b3; --body-c: #c9473b; --body-e: #2f3e69; --body-q: #2b2b2b; --body-u: #262626;
+  --gnd: #3b3b45; --v9: #c23a2b; --vb: #d08a17;
+  --display: "Chivo", system-ui, sans-serif; --mono: "Chivo Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #17150f; --panel: #201d16; --ink: #efe8db; --muted: #a59c8b; --line: #3a352b;
+  --board: #6e5530; --board-edge: #4d3a1f; --hole: #1d150b; --copper: #c97a3a; --copper-hi: #f0a868;
+  --accent: #5bb4d4; --warn: #ef7a5c; --ok: #7cc489;
+  --body-r: #d8c79f; --body-c: #c95347; --body-e: #4b5d96; --body-q: #111; --body-u: #0e0e0e;
+  --gnd: #b9b9c8; --v9: #ff6b55; --vb: #ffb340; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #17150f; --panel: #201d16; --ink: #efe8db; --muted: #a59c8b; --line: #3a352b;
+  --board: #6e5530; --board-edge: #4d3a1f; --hole: #1d150b; --copper: #c97a3a; --copper-hi: #f0a868;
+  --accent: #5bb4d4; --warn: #ef7a5c; --ok: #7cc489;
+  --body-r: #d8c79f; --body-c: #c95347; --body-e: #4b5d96; --body-q: #111; --body-u: #0e0e0e;
+  --gnd: #b9b9c8; --v9: #ff6b55; --vb: #ffb340; color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font-family: var(--display); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px; }
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px; }
+header h1 { font-weight: 800; font-size: clamp(26px, 4vw, 38px); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+header p { margin: 6px 0 0; color: var(--muted); max-width: 70ch; }
+.spec { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.spec span { font-family: var(--mono); font-size: 12px; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; color: var(--muted); }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+@media (max-width: 860px) { .main { grid-template-columns: 1fr; } }
+.boardcol { min-width: 0; display: grid; gap: 12px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { font: 600 13px var(--display); background: var(--panel); color: var(--ink); border: 0; padding: 7px 14px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hint { font-size: 13px; color: var(--muted); }
+.svgbox { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+svg#board { display: block; margin: 0 auto; width: 100%; max-width: 640px; height: auto; touch-action: manipulation; }
+svg text { font-family: var(--mono); }
+.side { display: grid; gap: 20px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+.card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
+#info .big { font-weight: 800; font-size: 22px; }
+#info .val { font-family: var(--mono); font-size: 15px; color: var(--accent); }
+#info p { margin: 6px 0 0; font-size: 14px; }
+#info ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; }
+.legend { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; font-size: 13px; align-items: center; }
+.sw { width: 22px; height: 4px; border-radius: 2px; }
+section h2.sec { font-size: 20px; font-weight: 800; margin: 0 0 10px; }
+.tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
+.tables > div { min-width: 0; }
+.tw { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.m { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.done td { color: var(--muted); text-decoration: line-through; }
+tr[data-id] { cursor: pointer; }
+tr[data-id]:hover td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+ol.steps { padding-left: 20px; margin: 0; display: grid; gap: 8px; max-width: 75ch; }
+.note { border-left: 3px solid var(--warn); padding: 6px 12px; background: color-mix(in srgb, var(--warn) 8%, transparent); font-size: 14px; max-width: 75ch; }
+.pinout { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
+@media (prefers-reduced-motion: no-preference) { .pt { transition: opacity .15s; } }
+</style>
+
+<div class="wrap">
+<header>
+  <h1>TS808 Perfboard Layout</h1>
+  <p>Full Tube Screamer: input buffer, clipping stage, tone stage and output buffer on an 18 × 24 hole perfboard. Drive, Tone and Level pots are wired off the board. Click any part to see what it connects to.</p>
+  <div class="spec">
+    <span>18 × 24 holes</span><span>resistor 6 holes</span><span>film cap 4</span><span>electrolytic 3</span><span>diode 3</span><span>transistor 3</span><span>DIP-8 socket</span>
+  </div>
+</header>
+
+<div class="main">
+  <div class="boardcol">
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="Board side">
+        <button id="v-front" aria-pressed="true">Component side</button>
+        <button id="v-back" aria-pressed="false">Solder side</button>
+      </div>
+      <span class="hint" id="sidehint">Looking at the parts. Wires underneath are shown faint.</span>
+    </div>
+    <div class="svgbox"><svg id="board" role="img" aria-label="Perfboard layout"></svg></div>
+  </div>
+  <div class="side">
+    <div class="card" id="info"></div>
+    <div class="card">
+      <h2>Wiring on the back</h2>
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+</div>
+
+<section>
+  <h2 class="sec">Parts</h2>
+  <div class="tables">
+    <div><div class="tw"><table id="bom"><thead><tr><th></th><th>Ref</th><th>Value</th><th>Job</th></tr></thead><tbody></tbody></table></div></div>
+    <div style="display:grid;gap:24px;align-content:start">
+      <div>
+        <h2 class="sec">Off-board wires</h2>
+        <div class="tw"><table id="offb"><thead><tr><th>Pad</th><th>Goes to</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div>
+        <h2 class="sec">Also needed</h2>
+        <div class="tw"><table><tbody>
+          <tr><td class="m">Drive</td><td>500k pot, log (A). Linear (B) works too, with most of the change in the first half.</td></tr>
+          <tr><td class="m">Tone</td><td>20k pot, linear (B). Clockwise is brighter.</td></tr>
+          <tr><td class="m">Level</td><td>100k pot, log (A)</td></tr>
+          <tr><td class="m">Socket</td><td>8-pin DIP IC socket</td></tr>
+          <tr><td class="m">Off-board</td><td>2 × ¼" mono jacks, 2.1 mm DC jack (centre negative), 3PDT footswitch for true bypass, optional LED + 4.7k</td></tr>
+        </tbody></table></div>
+      </div>
+      <div>
+        <h2 class="sec">Pinouts</h2>
+        <div class="pinout" id="pinouts"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Build order</h2>
+  <ol class="steps">
+    <li>Fit the <b>wire links on the back</b> first, while the board is empty. Short runs can be bent component leads or solder bridges. Use insulated wire where a link jumps over other holes (dashed on the drawing).</li>
+    <li>Low parts next: <b>diodes</b> (stripe = cathode, match the band on the drawing), then <b>resistors</b>.</li>
+    <li>The <b>DIP-8 socket</b> with its notch at the end shown. Don't solder the chip itself.</li>
+    <li><b>Film caps</b>, then <b>transistors</b> (flat face as drawn), then <b>electrolytics</b> (+ leg on the hole marked +).</li>
+    <li>Off-board wires to the pots, jacks and DC socket. The pots are seen from the back (lugs facing you, shaft away).</li>
+    <li>Before fitting the chip, power up and check: socket pin 8 ≈ 8.4 V, Volume lug 1 ≈ 4.2 V (half the supply). Then power off, fit the op-amp, and check pins 1, 2, 3, 5, 6, 7 all sit near that same half-supply voltage.</li>
+  </ol>
+  <p class="note">Any dual op-amp in an 8-pin DIP works: JRC4558D for the classic sound, TL072 or NE5532 are fine substitutes. If you use a transistor other than the 2SC1815, check its pin order: 2N3904, BC547 and S8050 are E-B-C, so turn or cross the legs to land E, C and B on the holes marked.</p>
+</section>
+</div>
+
+<script>
+const DATA = {"W": 18, "H": 24, "parts": [{"id": "R1", "type": "R", "value": "1k", "pins": [[1, 20], [1, 15]], "cells": [[1, 15], [1, 16], [1, 17], [1, 18], [1, 19], [1, 20]], "nets": ["n1", "B1"], "kind": "Resistor", "job": "Input series resistor", "short": "Input", "tip": "Resistors have no direction."}, {"id": "R2", "type": "R", "value": "510k", "pins": [[6, 20], [6, 15]], "cells": [[6, 15], [6, 16], [6, 17], [6, 18], [6, 19], [6, 20]], "nets": ["B1", "VB"], "kind": "Resistor", "job": "Biases Q1 base at 4.5 V; sets the ~500k input impedance", "short": "Q1 bias", "tip": "Resistors have no direction."}, {"id": "R3", "type": "R", "value": "10k", "pins": [[3, 13], [3, 18]], "cells": [[3, 13], [3, 14], [3, 15], [3, 16], [3, 17], [3, 18]], "nets": ["E1", "GND"], "kind": "Resistor", "job": "Q1 emitter load", "short": "Q1 emitter", "tip": "Resistors have no direction."}, {"id": "R4", "type": "R", "value": "4.7k", "pins": [[5, 8], [0, 8]], "cells": [[0, 8], [1, 8], [2, 8], [3, 8], [4, 8], [5, 8]], "nets": ["P2", "n4"], "kind": "Resistor", "job": "With C3 sets the mid hump and how much bass gets distorted", "short": "Gain leg", "tip": "Resistors have no direction."}, {"id": "R5", "type": "R", "value": "10k", "pins": [[5, 10], [5, 15]], "cells": [[5, 10], [5, 11], [5, 12], [5, 13], [5, 14], [5, 15]], "nets": ["P3", "VB"], "kind": "Resistor", "job": "Biases op-amp pin 3 at 4.5 V", "short": "Pin 3 bias", "tip": "Resistors have no direction."}, {"id": "R6", "type": "R", "value": "51k", "pins": [[2, 5], [2, 0]], "cells": [[2, 0], [2, 1], [2, 2], [2, 3], [2, 4], [2, 5]], "nets": ["P2", "DRV"], "kind": "Resistor", "job": "Minimum gain; in series with the Drive pot", "short": "Drive min", "tip": "Resistors have no direction."}, {"id": "R7", "type": "R", "value": "1k", "pins": [[7, 12], [12, 12]], "cells": [[7, 12], [8, 12], [9, 12], [10, 12], [11, 12], [12, 12]], "nets": ["P1", "P5"], "kind": "Resistor", "job": "With C5, the fixed treble cut after clipping", "short": "Treble cut", "tip": "Resistors have no direction."}, {"id": "R8", "type": "R", "value": "10k", "pins": [[13, 12], [13, 17]], "cells": [[13, 12], [13, 13], [13, 14], [13, 15], [13, 16], [13, 17]], "nets": ["P5", "VB"], "kind": "Resistor", "job": "Biases op-amp pin 5", "short": "Pin 5 bias", "tip": "Resistors have no direction."}, {"id": "R9", "type": "R", "value": "220", "pins": [[11, 1], [16, 1]], "cells": [[11, 1], [12, 1], [13, 1], [14, 1], [15, 1], [16, 1]], "nets": ["TW", "n9"], "kind": "Resistor", "job": "Tone network with C6", "short": "Tone", "tip": "Resistors have no direction."}, {"id": "R10", "type": "R", "value": "1k", "pins": [[16, 9], [11, 9]], "cells": [[11, 9], [12, 9], [13, 9], [14, 9], [15, 9], [16, 9]], "nets": ["P6", "P7"], "kind": "Resistor", "job": "Tone stage feedback", "short": "Tone feedback", "tip": "Resistors have no direction."}, {"id": "R11", "type": "R", "value": "510k", "pins": [[17, 3], [12, 3]], "cells": [[12, 3], [13, 3], [14, 3], [15, 3], [16, 3], [17, 3]], "nets": ["B2", "VB"], "kind": "Resistor", "job": "Keeps Q2 biased if the Level wiper lifts", "short": "Q2 bias", "tip": "Resistors have no direction."}, {"id": "R12", "type": "R", "value": "10k", "pins": [[17, 8], [17, 13]], "cells": [[17, 8], [17, 9], [17, 10], [17, 11], [17, 12], [17, 13]], "nets": ["E2", "GND"], "kind": "Resistor", "job": "Q2 emitter load", "short": "Q2 emitter", "tip": "Resistors have no direction."}, {"id": "R13", "type": "R", "value": "100", "pins": [[16, 11], [16, 16]], "cells": [[16, 11], [16, 12], [16, 13], [16, 14], [16, 15], [16, 16]], "nets": ["E2", "n13"], "kind": "Resistor", "job": "Output series resistor", "short": "Output", "tip": "Resistors have no direction."}, {"id": "R14", "type": "R", "value": "10k", "pins": [[17, 22], [12, 22]], "cells": [[12, 22], [13, 22], [14, 22], [15, 22], [16, 22], [17, 22]], "nets": ["OUT", "GND"], "kind": "Resistor", "job": "Output pulldown, stops pops", "short": "Output pulldown", "tip": "Resistors have no direction."}, {"id": "R15", "type": "R", "value": "10k", "pins": [[8, 14], [8, 19]], "cells": [[8, 14], [8, 15], [8, 16], [8, 17], [8, 18], [8, 19]], "nets": ["V9", "VB"], "kind": "Resistor", "job": "Top half of the 4.5 V divider", "short": "Bias divider", "tip": "Resistors have no direction."}, {"id": "R16", "type": "R", "value": "10k", "pins": [[9, 20], [14, 20]], "cells": [[9, 20], [10, 20], [11, 20], [12, 20], [13, 20], [14, 20]], "nets": ["VB", "GND"], "kind": "Resistor", "job": "Bottom half of the 4.5 V divider", "short": "Bias divider", "tip": "Resistors have no direction."}, {"id": "C1", "type": "C", "value": "22n", "pins": [[0, 23], [0, 20]], "cells": [[0, 20], [0, 21], [0, 22], [0, 23]], "nets": ["IN", "n1"], "kind": "Film capacitor", "job": "Input coupling cap (0.02 \u00b5F in the original)", "short": "Input cap", "tip": "Film caps have no direction."}, {"id": "C2", "type": "C", "value": "1\u00b5", "pins": [[3, 12], [3, 9]], "cells": [[3, 9], [3, 10], [3, 11], [3, 12]], "nets": ["E1", "P3"], "kind": "Film capacitor", "job": "Couples the buffer into the op-amp", "short": "Coupling", "tip": "Film caps have no direction."}, {"id": "C3", "type": "C", "value": "47n", "pins": [[0, 9], [0, 12]], "cells": [[0, 9], [0, 10], [0, 11], [0, 12]], "nets": ["n4", "GND"], "kind": "Film capacitor", "job": "With R4 sets the mid hump (~720 Hz)", "short": "Gain leg", "tip": "Film caps have no direction."}, {"id": "C4", "type": "C", "value": "51p", "pins": [[6, 6], [3, 6]], "cells": [[3, 6], [4, 6], [5, 6], [6, 6]], "nets": ["P1", "P2"], "kind": "Film capacitor", "job": "Treble cut in the clipping loop; keeps high drive smooth", "short": "Feedback cap", "tip": "Film caps have no direction."}, {"id": "C5", "type": "C", "value": "220n", "pins": [[14, 10], [14, 13]], "cells": [[14, 10], [14, 11], [14, 12], [14, 13]], "nets": ["P5", "GND"], "kind": "Film capacitor", "job": "With R7, the fixed treble cut", "short": "Treble cut", "tip": "Film caps have no direction."}, {"id": "C6", "type": "C", "value": "220n", "pins": [[15, 5], [15, 8]], "cells": [[15, 5], [15, 6], [15, 7], [15, 8]], "nets": ["n9", "GND"], "kind": "Film capacitor", "job": "Tone network with R9", "short": "Tone", "tip": "Film caps have no direction."}, {"id": "C7", "type": "C", "value": "1\u00b5", "pins": [[10, 7], [10, 4]], "cells": [[10, 4], [10, 5], [10, 6], [10, 7]], "nets": ["P7", "VH"], "kind": "Film capacitor", "job": "Couples tone stage to the Level pot", "short": "Coupling", "tip": "Film caps have no direction."}, {"id": "C8", "type": "E", "value": "10\u00b5", "pins": [[17, 16], [17, 18]], "cells": [[17, 16], [17, 17], [17, 18]], "nets": ["n13", "OUT"], "kind": "Electrolytic capacitor", "job": "Output coupling, + toward R13", "short": "Output cap", "tip": "Long leg (+) goes in the hole marked +. The stripe on the can is the \u2212 side.", "pinNames": ["+ leg", "\u2212 leg"]}, {"id": "C9", "type": "E", "value": "47\u00b5", "pins": [[11, 16], [11, 18]], "cells": [[11, 16], [11, 17], [11, 18]], "nets": ["VB", "GND"], "kind": "Electrolytic capacitor", "job": "Smooths the 4.5 V bias", "short": "Bias filter", "tip": "Long leg (+) goes in the hole marked +. The stripe on the can is the \u2212 side.", "pinNames": ["+ leg", "\u2212 leg"]}, {"id": "C10", "type": "E", "value": "100\u00b5", "pins": [[5, 23], [5, 21]], "cells": [[5, 21], [5, 22], [5, 23]], "nets": ["V9", "GND"], "kind": "Electrolytic capacitor", "job": "Supply filter", "short": "Supply filter", "tip": "Long leg (+) goes in the hole marked +. The stripe on the can is the \u2212 side.", "pinNames": ["+ leg", "\u2212 leg"]}, {"id": "D1", "type": "D", "value": "1N4148", "pins": [[6, 2], [4, 2]], "cells": [[4, 2], [5, 2], [6, 2]], "nets": ["P1", "P2"], "kind": "Diode", "job": "Clipping diode", "short": "Clipping", "tip": "The stripe (cathode) goes at the end shown with a band.", "pinNames": ["anode", "cathode (stripe)"]}, {"id": "D2", "type": "D", "value": "1N4148", "pins": [[4, 4], [6, 4]], "cells": [[4, 4], [5, 4], [6, 4]], "nets": ["P2", "P1"], "kind": "Diode", "job": "Clipping diode, the other way round", "short": "Clipping", "tip": "The stripe (cathode) goes at the end shown with a band.", "pinNames": ["anode", "cathode (stripe)"]}, {"id": "D3", "type": "D", "value": "1N4001", "pins": [[9, 23], [7, 23]], "cells": [[7, 23], [8, 23], [9, 23]], "nets": ["VIN", "V9"], "kind": "Diode", "job": "Reverse-polarity protection", "short": "Protection", "tip": "The stripe (cathode) goes at the end shown with a band.", "pinNames": ["anode", "cathode (stripe)"]}, {"id": "Q1", "type": "Q", "value": "C1815", "pins": [[1, 12], [1, 13], [1, 14]], "cells": [[1, 12], [1, 13], [1, 14]], "nets": ["E1", "V9", "B1"], "kind": "NPN transistor", "job": "Input buffer (emitter follower)", "short": "Input buffer", "tip": "Flat face toward the side drawn flat. E, C and B are marked on the holes.", "pinNames": ["E", "C", "B"], "face": [-1, 0]}, {"id": "Q2", "type": "Q", "value": "C1815", "pins": [[9, 4], [9, 3], [9, 2]], "cells": [[9, 4], [9, 3], [9, 2]], "nets": ["E2", "V9", "B2"], "kind": "NPN transistor", "job": "Output buffer (emitter follower)", "short": "Output buffer", "tip": "Flat face toward the side drawn flat. E, C and B are marked on the holes.", "pinNames": ["E", "C", "B"], "face": [1, 0]}, {"id": "U1", "type": "U", "value": "JRC4558 / TL072", "pins": [[6, 7], [6, 8], [6, 9], [6, 10], [9, 10], [9, 9], [9, 8], [9, 7]], "cells": [[6, 7], [6, 8], [6, 9], [6, 10], [9, 10], [9, 9], [9, 8], [9, 7], [7, 7], [7, 8], [7, 9], [7, 10], [8, 7], [8, 8], [8, 9], [8, 10]], "nets": ["P1", "P2", "P3", "GND", "P5", "P6", "P7", "V9"], "kind": "Op-amp (DIP-8 socket)", "pinNames": ["pin 1", "pin 2", "pin 3", "pin 4", "pin 5", "pin 6", "pin 7", "pin 8"], "job": "Dual op-amp: A = clipping stage, B = tone stage", "short": "Op-amp", "tip": "Solder a socket, not the chip. The notch marks the pin 1 end."}, {"id": "IN", "code": "IN", "type": "PAD", "value": "", "pins": [[2, 23]], "cells": [[2, 23]], "nets": ["IN"], "kind": "Wire pad", "short": "IN", "job": "Input jack tip (sleeve to ground)"}, {"id": "9V", "code": "9V", "type": "PAD", "value": "", "pins": [[11, 23]], "cells": [[11, 23]], "nets": ["VIN"], "kind": "Wire pad", "short": "9V", "job": "DC jack +9 V (the sleeve lug on a centre-negative jack)"}, {"id": "G", "code": "G", "type": "PAD", "value": "", "pins": [[0, 17]], "cells": [[0, 17]], "nets": ["GND"], "kind": "Wire pad", "short": "GND", "job": "Ground: DC jack centre pin (\u2212), input and output jack sleeves"}, {"id": "OUT", "code": "OUT", "type": "PAD", "value": "", "pins": [[17, 20]], "cells": [[17, 20]], "nets": ["OUT"], "kind": "Wire pad", "short": "OUT", "job": "Output jack tip"}, {"id": "D1p", "code": "DR1", "type": "PAD", "value": "", "pins": [[0, 0]], "cells": [[0, 0]], "nets": ["DRV"], "kind": "Wire pad", "short": "DRV 1", "job": "Drive pot (500k) lug 1"}, {"id": "D2p", "code": "DR2", "type": "PAD", "value": "", "pins": [[6, 0]], "cells": [[6, 0]], "nets": ["P1"], "kind": "Wire pad", "short": "DRV 2", "job": "Drive pot lug 2 (wiper). Leave lug 3 unconnected or tie it to lug 2"}, {"id": "T1", "code": "TN1", "type": "PAD", "value": "", "pins": [[17, 5]], "cells": [[17, 5]], "nets": ["P5"], "kind": "Wire pad", "short": "TONE 1", "job": "Tone pot (20k B) lug 1"}, {"id": "T2", "code": "TN2", "type": "PAD", "value": "", "pins": [[11, 0]], "cells": [[11, 0]], "nets": ["TW"], "kind": "Wire pad", "short": "TONE 2", "job": "Tone pot lug 2 (wiper)"}, {"id": "T3", "code": "TN3", "type": "PAD", "value": "", "pins": [[17, 7]], "cells": [[17, 7]], "nets": ["P6"], "kind": "Wire pad", "short": "TONE 3", "job": "Tone pot lug 3"}, {"id": "V3", "code": "LV3", "type": "PAD", "value": "", "pins": [[10, 0]], "cells": [[10, 0]], "nets": ["VH"], "kind": "Wire pad", "short": "LVL 3", "job": "Level pot (100k A) lug 3"}, {"id": "V2", "code": "LV2", "type": "PAD", "value": "", "pins": [[17, 0]], "cells": [[17, 0]], "nets": ["B2"], "kind": "Wire pad", "short": "LVL 2", "job": "Level pot lug 2 (wiper)"}, {"id": "V1", "code": "LV1", "type": "PAD", "value": "", "pins": [[12, 0]], "cells": [[12, 0]], "nets": ["VB"], "kind": "Wire pad", "short": "LVL 1", "job": "Level pot lug 1"}], "wires": [{"net": "GND", "a": [0, 17], "b": [0, 18], "jump": false}, {"net": "GND", "a": [0, 18], "b": [1, 18], "jump": false}, {"net": "GND", "a": [1, 18], "b": [2, 18], "jump": false}, {"net": "GND", "a": [2, 18], "b": [3, 18], "jump": false}, {"net": "GND", "a": [5, 21], "b": [4, 21], "jump": false}, {"net": "GND", "a": [4, 21], "b": [3, 21], "jump": false}, {"net": "GND", "a": [3, 21], "b": [3, 20], "jump": false}, {"net": "GND", "a": [3, 20], "b": [3, 19], "jump": false}, {"net": "GND", "a": [3, 19], "b": [3, 18], "jump": false}, {"net": "GND", "a": [0, 12], "b": [0, 13], "jump": false}, {"net": "GND", "a": [0, 13], "b": [0, 14], "jump": false}, {"net": "GND", "a": [0, 14], "b": [0, 15], "jump": false}, {"net": "GND", "a": [0, 15], "b": [0, 16], "jump": false}, {"net": "GND", "a": [0, 16], "b": [0, 17], "jump": false}, {"net": "GND", "a": [12, 22], "b": [12, 21], "jump": false}, {"net": "GND", "a": [12, 21], "b": [11, 21], "jump": false}, {"net": "GND", "a": [11, 21], "b": [10, 21], "jump": false}, {"net": "GND", "a": [10, 21], "b": [9, 21], "jump": false}, {"net": "GND", "a": [9, 21], "b": [8, 21], "jump": false}, {"net": "GND", "a": [8, 21], "b": [7, 21], "jump": false}, {"net": "GND", "a": [7, 21], "b": [6, 21], "jump": false}, {"net": "GND", "a": [6, 21], "b": [5, 21], "jump": false}, {"net": "GND", "a": [11, 18], "b": [11, 19], "jump": false}, {"net": "GND", "a": [11, 19], "b": [11, 20], "jump": false}, {"net": "GND", "a": [11, 20], "b": [11, 21], "jump": false}, {"net": "GND", "a": [14, 20], "b": [14, 21], "jump": false}, {"net": "GND", "a": [14, 21], "b": [13, 21], "jump": false}, {"net": "GND", "a": [13, 21], "b": [12, 21], "jump": false}, {"net": "GND", "a": [14, 13], "b": [14, 14], "jump": false}, {"net": "GND", "a": [14, 14], "b": [14, 15], "jump": false}, {"net": "GND", "a": [14, 15], "b": [14, 16], "jump": false}, {"net": "GND", "a": [14, 16], "b": [14, 17], "jump": false}, {"net": "GND", "a": [14, 17], "b": [14, 18], "jump": false}, {"net": "GND", "a": [14, 18], "b": [14, 19], "jump": false}, {"net": "GND", "a": [14, 19], "b": [14, 20], "jump": false}, {"net": "GND", "a": [17, 13], "b": [16, 13], "jump": false}, {"net": "GND", "a": [16, 13], "b": [15, 13], "jump": false}, {"net": "GND", "a": [15, 13], "b": [14, 13], "jump": false}, {"net": "GND", "a": [15, 8], "b": [15, 9], "jump": false}, {"net": "GND", "a": [15, 9], "b": [15, 10], "jump": false}, {"net": "GND", "a": [15, 10], "b": [15, 11], "jump": false}, {"net": "GND", "a": [15, 11], "b": [15, 12], "jump": false}, {"net": "GND", "a": [15, 12], "b": [15, 13], "jump": false}, {"net": "GND", "a": [6, 10], "b": [6, 11], "jump": false}, {"net": "GND", "a": [6, 11], "b": [5, 11], "jump": false}, {"net": "GND", "a": [5, 11], "b": [4, 11], "jump": false}, {"net": "GND", "a": [4, 11], "b": [3, 11], "jump": false}, {"net": "GND", "a": [3, 11], "b": [2, 11], "jump": false}, {"net": "GND", "a": [2, 11], "b": [1, 11], "jump": false}, {"net": "GND", "a": [1, 11], "b": [0, 11], "jump": false}, {"net": "GND", "a": [0, 11], "b": [0, 12], "jump": false}, {"net": "VB", "a": [5, 15], "b": [6, 15], "jump": false}, {"net": "VB", "a": [8, 19], "b": [7, 19], "jump": false}, {"net": "VB", "a": [7, 19], "b": [7, 18], "jump": false}, {"net": "VB", "a": [7, 18], "b": [7, 17], "jump": false}, {"net": "VB", "a": [7, 17], "b": [7, 16], "jump": false}, {"net": "VB", "a": [7, 16], "b": [7, 15], "jump": false}, {"net": "VB", "a": [7, 15], "b": [6, 15], "jump": false}, {"net": "VB", "a": [9, 20], "b": [8, 20], "jump": false}, {"net": "VB", "a": [8, 20], "b": [8, 19], "jump": false}, {"net": "VB", "a": [11, 16], "b": [10, 16], "jump": false}, {"net": "VB", "a": [10, 16], "b": [9, 16], "jump": false}, {"net": "VB", "a": [9, 16], "b": [8, 16], "jump": false}, {"net": "VB", "a": [8, 16], "b": [7, 16], "jump": false}, {"net": "VB", "a": [13, 17], "b": [13, 16], "jump": false}, {"net": "VB", "a": [13, 16], "b": [12, 16], "jump": false}, {"net": "VB", "a": [12, 16], "b": [11, 16], "jump": false}, {"net": "VB", "a": [12, 3], "b": [12, 4], "jump": false}, {"net": "VB", "a": [12, 4], "b": [12, 5], "jump": false}, {"net": "VB", "a": [12, 5], "b": [12, 6], "jump": false}, {"net": "VB", "a": [12, 6], "b": [12, 7], "jump": false}, {"net": "VB", "a": [12, 7], "b": [12, 8], "jump": false}, {"net": "VB", "a": [12, 8], "b": [12, 9], "jump": false}, {"net": "VB", "a": [12, 9], "b": [12, 10], "jump": false}, {"net": "VB", "a": [12, 10], "b": [11, 10], "jump": false}, {"net": "VB", "a": [11, 10], "b": [11, 11], "jump": false}, {"net": "VB", "a": [11, 11], "b": [11, 12], "jump": false}, {"net": "VB", "a": [11, 12], "b": [11, 13], "jump": false}, {"net": "VB", "a": [11, 13], "b": [11, 14], "jump": false}, {"net": "VB", "a": [11, 14], "b": [11, 15], "jump": false}, {"net": "VB", "a": [11, 15], "b": [11, 16], "jump": false}, {"net": "VB", "a": [12, 0], "b": [12, 1], "jump": false}, {"net": "VB", "a": [12, 1], "b": [12, 2], "jump": false}, {"net": "VB", "a": [12, 2], "b": [12, 3], "jump": false}, {"net": "P1", "a": [6, 7], "b": [7, 7], "jump": false}, {"net": "P1", "a": [7, 7], "b": [7, 8], "jump": false}, {"net": "P1", "a": [7, 8], "b": [7, 9], "jump": false}, {"net": "P1", "a": [7, 9], "b": [7, 10], "jump": false}, {"net": "P1", "a": [7, 10], "b": [7, 11], "jump": false}, {"net": "P1", "a": [7, 11], "b": [7, 12], "jump": false}, {"net": "P1", "a": [6, 6], "b": [6, 7], "jump": false}, {"net": "P1", "a": [6, 4], "b": [6, 5], "jump": false}, {"net": "P1", "a": [6, 5], "b": [6, 6], "jump": false}, {"net": "P1", "a": [6, 2], "b": [6, 3], "jump": false}, {"net": "P1", "a": [6, 3], "b": [6, 4], "jump": false}, {"net": "P1", "a": [6, 0], "b": [6, 1], "jump": false}, {"net": "P1", "a": [6, 1], "b": [6, 2], "jump": false}, {"net": "P2", "a": [6, 8], "b": [5, 8], "jump": false}, {"net": "P2", "a": [3, 6], "b": [3, 7], "jump": false}, {"net": "P2", "a": [3, 7], "b": [4, 7], "jump": false}, {"net": "P2", "a": [4, 7], "b": [5, 7], "jump": false}, {"net": "P2", "a": [5, 7], "b": [5, 8], "jump": false}, {"net": "P2", "a": [2, 5], "b": [3, 5], "jump": false}, {"net": "P2", "a": [3, 5], "b": [3, 6], "jump": false}, {"net": "P2", "a": [4, 4], "b": [3, 4], "jump": false}, {"net": "P2", "a": [3, 4], "b": [3, 5], "jump": false}, {"net": "P2", "a": [4, 2], "b": [4, 3], "jump": false}, {"net": "P2", "a": [4, 3], "b": [4, 4], "jump": false}, {"net": "V9", "a": [9, 7], "b": [8, 7], "jump": false}, {"net": "V9", "a": [8, 7], "b": [8, 8], "jump": false}, {"net": "V9", "a": [8, 8], "b": [8, 9], "jump": false}, {"net": "V9", "a": [8, 9], "b": [8, 10], "jump": false}, {"net": "V9", "a": [8, 10], "b": [8, 11], "jump": false}, {"net": "V9", "a": [8, 11], "b": [8, 12], "jump": false}, {"net": "V9", "a": [8, 12], "b": [8, 13], "jump": false}, {"net": "V9", "a": [8, 13], "b": [8, 14], "jump": false}, {"net": "V9", "a": [9, 3], "b": [8, 3], "jump": false}, {"net": "V9", "a": [8, 3], "b": [8, 4], "jump": false}, {"net": "V9", "a": [8, 4], "b": [8, 5], "jump": false}, {"net": "V9", "a": [8, 5], "b": [8, 6], "jump": false}, {"net": "V9", "a": [8, 6], "b": [8, 7], "jump": false}, {"net": "V9", "a": [1, 13], "b": [2, 13], "jump": false}, {"net": "V9", "a": [2, 13], "b": [2, 14], "jump": false}, {"net": "V9", "a": [2, 14], "b": [3, 14], "jump": false}, {"net": "V9", "a": [3, 14], "b": [4, 14], "jump": false}, {"net": "V9", "a": [4, 14], "b": [5, 14], "jump": false}, {"net": "V9", "a": [5, 14], "b": [6, 14], "jump": false}, {"net": "V9", "a": [6, 14], "b": [7, 14], "jump": false}, {"net": "V9", "a": [7, 14], "b": [8, 14], "jump": false}, {"net": "V9", "a": [7, 23], "b": [7, 22], "jump": false}, {"net": "V9", "a": [7, 22], "b": [7, 14], "jump": true}, {"net": "V9", "a": [5, 23], "b": [6, 23], "jump": false}, {"net": "V9", "a": [6, 23], "b": [7, 23], "jump": false}, {"net": "P5", "a": [13, 12], "b": [12, 12], "jump": false}, {"net": "P5", "a": [14, 10], "b": [13, 10], "jump": false}, {"net": "P5", "a": [13, 10], "b": [13, 11], "jump": false}, {"net": "P5", "a": [13, 11], "b": [13, 12], "jump": false}, {"net": "P5", "a": [17, 5], "b": [17, 6], "jump": false}, {"net": "P5", "a": [17, 6], "b": [16, 6], "jump": false}, {"net": "P5", "a": [16, 6], "b": [15, 6], "jump": false}, {"net": "P5", "a": [15, 6], "b": [14, 6], "jump": false}, {"net": "P5", "a": [14, 6], "b": [14, 7], "jump": false}, {"net": "P5", "a": [14, 7], "b": [14, 8], "jump": false}, {"net": "P5", "a": [14, 8], "b": [14, 9], "jump": false}, {"net": "P5", "a": [14, 9], "b": [14, 10], "jump": false}, {"net": "P5", "a": [9, 10], "b": [13, 10], "jump": true}, {"net": "B1", "a": [1, 14], "b": [1, 15], "jump": false}, {"net": "B1", "a": [6, 20], "b": [5, 20], "jump": false}, {"net": "B1", "a": [5, 20], "b": [4, 20], "jump": false}, {"net": "B1", "a": [4, 20], "b": [4, 19], "jump": false}, {"net": "B1", "a": [4, 19], "b": [4, 18], "jump": false}, {"net": "B1", "a": [4, 18], "b": [4, 17], "jump": false}, {"net": "B1", "a": [4, 17], "b": [4, 16], "jump": false}, {"net": "B1", "a": [4, 16], "b": [4, 15], "jump": false}, {"net": "B1", "a": [4, 15], "b": [3, 15], "jump": false}, {"net": "B1", "a": [3, 15], "b": [2, 15], "jump": false}, {"net": "B1", "a": [2, 15], "b": [1, 15], "jump": false}, {"net": "B2", "a": [17, 0], "b": [17, 1], "jump": false}, {"net": "B2", "a": [17, 1], "b": [17, 2], "jump": false}, {"net": "B2", "a": [17, 2], "b": [17, 3], "jump": false}, {"net": "B2", "a": [9, 2], "b": [17, 2], "jump": true}, {"net": "E1", "a": [3, 12], "b": [3, 13], "jump": false}, {"net": "E1", "a": [1, 12], "b": [2, 12], "jump": false}, {"net": "E1", "a": [2, 12], "b": [3, 12], "jump": false}, {"net": "E2", "a": [16, 11], "b": [17, 11], "jump": false}, {"net": "E2", "a": [17, 11], "b": [17, 10], "jump": false}, {"net": "E2", "a": [17, 10], "b": [17, 9], "jump": false}, {"net": "E2", "a": [17, 9], "b": [17, 8], "jump": false}, {"net": "E2", "a": [9, 4], "b": [9, 5], "jump": false}, {"net": "E2", "a": [9, 5], "b": [10, 5], "jump": false}, {"net": "E2", "a": [10, 5], "b": [11, 5], "jump": false}, {"net": "E2", "a": [11, 5], "b": [11, 6], "jump": false}, {"net": "E2", "a": [11, 6], "b": [11, 7], "jump": false}, {"net": "E2", "a": [11, 7], "b": [11, 8], "jump": false}, {"net": "E2", "a": [11, 8], "b": [17, 8], "jump": true}, {"net": "OUT", "a": [17, 20], "b": [17, 21], "jump": false}, {"net": "OUT", "a": [17, 21], "b": [17, 22], "jump": false}, {"net": "OUT", "a": [17, 18], "b": [17, 19], "jump": false}, {"net": "OUT", "a": [17, 19], "b": [17, 20], "jump": false}, {"net": "P3", "a": [6, 9], "b": [5, 9], "jump": false}, {"net": "P3", "a": [5, 9], "b": [5, 10], "jump": false}, {"net": "P3", "a": [3, 9], "b": [4, 9], "jump": false}, {"net": "P3", "a": [4, 9], "b": [5, 9], "jump": false}, {"net": "P6", "a": [17, 7], "b": [16, 7], "jump": false}, {"net": "P6", "a": [16, 7], "b": [16, 8], "jump": false}, {"net": "P6", "a": [16, 8], "b": [16, 9], "jump": false}, {"net": "P6", "a": [9, 9], "b": [16, 9], "jump": true}, {"net": "P7", "a": [10, 7], "b": [10, 8], "jump": false}, {"net": "P7", "a": [10, 8], "b": [10, 9], "jump": false}, {"net": "P7", "a": [10, 9], "b": [11, 9], "jump": false}, {"net": "P7", "a": [9, 8], "b": [10, 8], "jump": false}, {"net": "DRV", "a": [0, 0], "b": [1, 0], "jump": false}, {"net": "DRV", "a": [1, 0], "b": [2, 0], "jump": false}, {"net": "IN", "a": [2, 23], "b": [1, 23], "jump": false}, {"net": "IN", "a": [1, 23], "b": [0, 23], "jump": false}, {"net": "TW", "a": [11, 0], "b": [11, 1], "jump": false}, {"net": "VH", "a": [10, 0], "b": [10, 1], "jump": false}, {"net": "VH", "a": [10, 1], "b": [10, 2], "jump": false}, {"net": "VH", "a": [10, 2], "b": [10, 3], "jump": false}, {"net": "VH", "a": [10, 3], "b": [10, 4], "jump": false}, {"net": "VIN", "a": [11, 23], "b": [10, 23], "jump": false}, {"net": "VIN", "a": [10, 23], "b": [9, 23], "jump": false}, {"net": "n1", "a": [0, 20], "b": [1, 20], "jump": false}, {"net": "n13", "a": [17, 16], "b": [16, 16], "jump": false}, {"net": "n4", "a": [0, 9], "b": [0, 8], "jump": false}, {"net": "n9", "a": [15, 5], "b": [16, 5], "jump": false}, {"net": "n9", "a": [16, 5], "b": [16, 4], "jump": false}, {"net": "n9", "a": [16, 4], "b": [16, 3], "jump": false}, {"net": "n9", "a": [16, 3], "b": [16, 2], "jump": false}, {"net": "n9", "a": [16, 2], "b": [16, 1], "jump": false}], "netinfo": {"GND": "ground", "V9": "+9 V", "VB": "4.5 V bias", "VIN": "+9 V from the DC jack, before D3", "IN": "input jack", "n1": "C1 \u2192 R1", "B1": "Q1 base", "E1": "Q1 emitter (buffered input)", "P3": "op-amp pin 3 (+A)", "P2": "op-amp pin 2 (\u2212A)", "P1": "op-amp pin 1 (clipped output)", "n4": "R4 \u2192 C3", "DRV": "R6 \u2192 Drive pot", "P5": "op-amp pin 5 (+B)", "P6": "op-amp pin 6 (\u2212B)", "P7": "op-amp pin 7 (tone output)", "TW": "Tone pot wiper", "n9": "R9 \u2192 C6", "VH": "C7 \u2192 Level pot", "B2": "Q2 base (Level wiper)", "E2": "Q2 emitter", "n13": "R13 \u2192 C8", "OUT": "output jack"}};
+const P = 26, M = 22;   // hole pitch, margin
+const W = DATA.W, H = DATA.H;
+const svg = document.getElementById('board');
+let side = 'front', selected = null;
+try { side = localStorage.getItem('ts808side') || 'front'; } catch (e) {}
+const NS = 'http://www.w3.org/2000/svg';
+const el = (t, a = {}, parent) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (parent) parent.appendChild(e); return e; };
+const X = x => M + (side === 'back' ? (W - 1 - x) : x) * P;
+const Y = y => M + y * P;
+
+// net colours: rails fixed, signal nets from a hue wheel
+const css = getComputedStyle(document.documentElement);
+const sigNets = Object.keys(DATA.netinfo).filter(n => !['GND','V9','VB'].includes(n));
+function netColor(n) {
+  if (n === 'GND') return 'var(--gnd)'; if (n === 'V9') return 'var(--v9)'; if (n === 'VB') return 'var(--vb)';
+  const i = sigNets.indexOf(n); const hue = (i * 137.5 + 190) % 360;
+  return `hsl(${hue} 62% var(--sigL, 42%))`;
+}
+document.documentElement.style.setProperty('--sigL', matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme !== 'light' ? '62%' : '40%');
+
+const BANDS = ['#111','#7a4a1e','#d12a1f','#ef7d1a','#f2c916','#2e9a3a','#2a55c4','#7b3fb0','#8d8d8d','#f4f4f4'];
+function bands(ohms) {
+  let e = 0, v = ohms; while (v >= 100) { v /= 10; e++; }
+  v = Math.round(v); const d = String(v).padStart(2, '0');
+  return [BANDS[+d[0]], BANDS[+d[1]], BANDS[e], '#c9a640'];
+}
+function parseOhms(s) { const m = s.match(/^([\d.]+)\s*([kM]?)/); return +m[1] * ({ '': 1, k: 1e3, M: 1e6 }[m[2]]); }
+
+function draw() {
+  svg.innerHTML = '';
+  svg.setAttribute('viewBox', `0 0 ${2 * M + (W - 1) * P} ${2 * M + (H - 1) * P + 14}`);
+  const g0 = el('g', {}, svg);
+  el('rect', { x: 4, y: 4, width: 2 * M + (W - 1) * P - 8, height: 2 * M + (H - 1) * P - 8, rx: 6, fill: 'var(--board)', stroke: 'var(--board-edge)', 'stroke-width': 2 }, g0);
+  // coordinates
+  for (let x = 0; x < W; x++) if (x % 2 === 0 || W < 20) el('text', { x: X(x), y: 2 * M + (H - 1) * P + 10, 'font-size': 8, 'text-anchor': 'middle', fill: 'var(--muted)' }, g0).textContent = String.fromCharCode(65 + x);
+  for (let y = 0; y < H; y++) el('text', { x: side === 'back' ? 2 * M + (W - 1) * P - 9 : 9, y: Y(y) + 3, 'font-size': 8, 'text-anchor': 'middle', fill: 'var(--hole)' }, g0).textContent = y + 1;
+  // copper pads
+  for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) {
+    el('circle', { cx: X(x), cy: Y(y), r: 7.2, fill: 'none', stroke: 'var(--copper)', 'stroke-width': 2.2, opacity: side === 'back' ? 0.9 : 0.35 }, g0);
+    el('circle', { cx: X(x), cy: Y(y), r: 3, fill: 'var(--hole)' }, g0);
+  }
+  const wires = el('g', {}, svg), parts = el('g', {}, svg), sel = selected ? new Set(selected.nets) : null;
+  const back = side === 'back';
+  // wires
+  for (const w of DATA.wires) {
+    const dim = sel && !sel.has(w.net);
+    const c = netColor(w.net);
+    const [a, b] = [w.a, w.b];
+    const attrs = { x1: X(a[0]), y1: Y(a[1]), x2: X(b[0]), y2: Y(b[1]), stroke: c, 'stroke-linecap': 'round', class: 'pt' };
+    if (w.jump) {
+      Object.assign(attrs, { 'stroke-width': back ? 4 : 3, 'stroke-dasharray': '7 5', opacity: dim ? 0.12 : (back ? 1 : 0.55) });
+    } else Object.assign(attrs, { 'stroke-width': back ? 7 : 4, opacity: dim ? 0.12 : (back ? 0.95 : 0.4) });
+    el('line', attrs, wires);
+  }
+  // solder blobs on back
+  if (back) for (const p of DATA.parts) for (let i = 0; i < p.pins.length; i++) {
+    const [x, y] = p.pins[i]; const dim = sel && !sel.has(p.nets[i]);
+    el('circle', { cx: X(x), cy: Y(y), r: 6, fill: 'var(--copper-hi)', stroke: netColor(p.nets[i]), 'stroke-width': 2.4, opacity: dim ? .25 : 1 }, parts);
+  }
+  for (const p of DATA.parts) drawPart(p, parts, back, sel);
+}
+
+function drawPart(p, root, back, sel) {
+  const isSel = selected && selected.id === p.id;
+  const dim = selected && !isSel && !p.nets.some(n => sel.has(n));
+  const g = el('g', { opacity: back ? (isSel ? 1 : 0.28) : (dim ? 0.35 : 1), cursor: 'pointer', class: 'pt', tabindex: 0, role: 'button', 'aria-label': `${p.id} ${p.value}` }, root);
+  g.addEventListener('click', e => { e.stopPropagation(); select(p.id); });
+  g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(p.id); } });
+  const cs = p.cells, a = p.pins[0], b = p.pins[p.pins.length - 1];
+  const xs = cs.map(c => X(c[0])), ys = cs.map(c => Y(c[1]));
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const horiz = y0 === y1 && x1 > x0;
+  const hl = isSel ? 'var(--accent)' : 'none';
+  const lead = (s) => el('line', { x1: X(a[0]), y1: Y(a[1]), x2: X(b[0]), y2: Y(b[1]), stroke: '#8d8d8d', 'stroke-width': 2.2 }, g);
+  const label = (txt, cx, cy, col = 'var(--ink)', size = 10) => {
+    const t = el('text', { x: cx, y: cy, 'font-size': size, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: col, 'font-weight': 600, 'paint-order': 'stroke', stroke: 'var(--board)', 'stroke-width': 3 }, g);
+    t.textContent = txt; return t;
+  };
+  const midx = (x0 + x1) / 2, midy = (y0 + y1) / 2;
+  const nearRight = Math.max(...cs.map(c => back ? W - 1 - c[0] : c[0])) >= W - 2;
+  const sx = nearRight ? -1 : 1;
+  if (p.type === 'PAD') {
+    el('rect', { x: X(a[0]) - 10, y: Y(a[1]) - 10, width: 20, height: 20, rx: 3, fill: netColor(p.nets[0]), stroke: isSel ? 'var(--accent)' : 'var(--board-edge)', 'stroke-width': isSel ? 3 : 1 }, g);
+    const t = el('text', { x: X(a[0]), y: Y(a[1]), 'font-size': p.code.length > 2 ? 7.5 : 8.5, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: '#fff', 'font-weight': 700 }, g);
+    t.textContent = p.code;
+    return;
+  }
+  if (p.type === 'R') {
+    lead();
+    const L = (horiz ? x1 - x0 : y1 - y0) * 0.62, T = 10;
+    const bx = horiz ? midx - L / 2 : midx - T / 2, by = horiz ? midy - T / 2 : midy - L / 2;
+    el('rect', { x: bx, y: by, width: horiz ? L : T, height: horiz ? T : L, rx: 4, fill: 'var(--body-r)', stroke: isSel ? 'var(--accent)' : '#7d6a45', 'stroke-width': isSel ? 2.5 : 1 }, g);
+    const bs = bands(parseOhms(p.value));
+    bs.forEach((c, i) => {
+      const f = [0.18, 0.32, 0.46, 0.8][i] * L;
+      if (horiz) el('rect', { x: bx + f - 2, y: by, width: 4, height: T, fill: c }, g);
+      else el('rect', { x: bx, y: by + f - 2, width: T, height: 4, fill: c }, g);
+    });
+    if (horiz) { label(p.id, midx, midy - 13); label(p.value, midx, midy + 14, 'var(--muted)', 9); }
+    else { label(p.id, midx + 17 * sx, midy - 7); label(p.value, midx + 17 * sx, midy + 6, 'var(--muted)', 9); }
+  } else if (p.type === 'C') {
+    lead();
+    const L = (horiz ? x1 - x0 : y1 - y0) * 0.72, T = 12;
+    el('rect', { x: horiz ? midx - L / 2 : midx - T / 2, y: horiz ? midy - T / 2 : midy - L / 2, width: horiz ? L : T, height: horiz ? T : L, rx: 3, fill: 'var(--body-c)', stroke: hl, 'stroke-width': 2.5 }, g);
+    label(p.value, midx, midy, '#fff', 9).setAttribute('stroke', 'none');
+    if (horiz) label(p.id, midx, midy - 15); else label(p.id, midx + 17 * sx, midy);
+  } else if (p.type === 'E') {
+    lead();
+    const r = 15;
+    el('circle', { cx: midx, cy: midy, r, fill: 'var(--body-e)', stroke: hl, 'stroke-width': 2.5 }, g);
+    // stripe on the negative side
+    const nx = X(b[0]) - midx, ny = Y(b[1]) - midy, nl = Math.hypot(nx, ny) || 1;
+    el('path', { d: arc(midx, midy, r, Math.atan2(ny, nx)), fill: '#d6d6d6' }, g);
+    el('text', { x: X(a[0]) + (horiz ? 0 : 10), y: Y(a[1]) + (horiz ? -9 : 0), 'font-size': 12, 'font-weight': 800, fill: 'var(--warn)', 'text-anchor': 'middle', 'dominant-baseline': 'central' }, g).textContent = '+';
+    label(p.value, midx, midy, '#fff', 8.5).setAttribute('stroke', 'none');
+    label(p.id, midx + (horiz ? 0 : 26 * sx), midy + (horiz ? -21 : 0));
+  } else if (p.type === 'D') {
+    lead();
+    const L = (horiz ? x1 - x0 : y1 - y0) * 0.6, T = 8;
+    const glass = p.value === '1N4148';
+    el('rect', { x: horiz ? midx - L / 2 : midx - T / 2, y: horiz ? midy - T / 2 : midy - L / 2, width: horiz ? L : T, height: horiz ? T : L, rx: 3, fill: glass ? '#e46a3c' : '#2a2a2a', stroke: hl, 'stroke-width': 2.5 }, g);
+    // cathode band near pin 2
+    const k = p.pins[1], dx = Math.sign(X(k[0]) - midx), dy = Math.sign(Y(k[1]) - midy);
+    const bx = midx + dx * (L / 2 - 4), by = midy + dy * (L / 2 - 4);
+    el('rect', { x: horiz ? bx - 2 : midx - T / 2, y: horiz ? midy - T / 2 : by - 2, width: horiz ? 4 : T, height: horiz ? T : 4, fill: glass ? '#111' : '#ddd' }, g);
+    if (horiz) label(p.id, midx, midy - 13); else label(p.id, midx + 15 * sx, midy);
+    if (horiz) label(p.value, midx, midy + 13, 'var(--muted)', 8); else label(p.value, midx + 15 * sx, midy + 12, 'var(--muted)', 8);
+  } else if (p.type === 'Q') {
+    const r = 14, fx = back ? -p.face[0] : p.face[0], fy = p.face[1];
+    const ang = Math.atan2(-fy, -fx);           // direction of the round back
+    const cx = midx + fx * 4, cy = midy + fy * 4;  // flat edge sits just past the leads
+    const a1 = ang - Math.PI / 2, a2 = ang + Math.PI / 2;
+    el('path', { d: `M ${cx + r * Math.cos(a1)} ${cy + r * Math.sin(a1)} A ${r} ${r} 0 0 1 ${cx + r * Math.cos(a2)} ${cy + r * Math.sin(a2)} Z`,
+      fill: 'var(--body-q)', stroke: isSel ? 'var(--accent)' : 'none', 'stroke-width': 2.5 }, g);
+    ['E', 'C', 'B'].forEach((s, i) => {
+      const [x, y] = p.pins[i];
+      el('circle', { cx: X(x), cy: Y(y), r: 3.4, fill: '#c8c8c8' }, g);
+      const lx = X(x) + fx * 11, ly = Y(y) + fy * 11;
+      el('text', { x: lx, y: ly, 'font-size': 9, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink)', 'font-weight': 800, 'paint-order': 'stroke', stroke: 'var(--board)', 'stroke-width': 3 }, g).textContent = s;
+    });
+    label(p.id, cx + Math.cos(ang) * (r + 10) + (horiz ? 26 : 0), cy + Math.sin(ang) * (r + 10) + (horiz ? 0 : -24), 'var(--ink)', 10);
+  } else if (p.type === 'U') {
+    const pad = 9;
+    el('rect', { x: x0 - pad, y: y0 - pad, width: x1 - x0 + 2 * pad, height: y1 - y0 + 2 * pad, rx: 3, fill: 'var(--body-u)', stroke: isSel ? 'var(--accent)' : '#555', 'stroke-width': isSel ? 2.5 : 1 }, g);
+    // notch at pin-1 end
+    const p1 = p.pins[0], p8 = p.pins[7];
+    const nx = (X(p1[0]) + X(p8[0])) / 2, ny = Y(p1[1]) + (Y(p1[1]) < midy ? -pad : pad);
+    el('path', { d: `M ${nx - 7} ${ny} A 7 7 0 0 ${Y(p1[1]) < midy ? 0 : 1} ${nx + 7} ${ny}`, fill: 'var(--board)', stroke: '#555' }, g);
+    p.pins.forEach(([x, y], i) => {
+      el('rect', { x: X(x) - 5, y: Y(y) - 3, width: 10, height: 6, fill: '#c9c9c9' }, g);
+      const inner = X(x) < midx ? 13 : -13;
+      el('text', { x: X(x) + inner, y: Y(y), 'font-size': 8, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: '#ddd' }, g).textContent = i + 1;
+    });
+    el('circle', { cx: X(p1[0]) + (X(p1[0]) < midx ? 13 : -13), cy: Y(p1[1]) + (Y(p1[1]) < midy ? -10 : 10), r: 0 }, g);
+    const t = el('text', { x: midx, y: midy, 'font-size': 10, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: '#eee', 'font-weight': 600, transform: `rotate(-90 ${midx} ${midy})` }, g);
+    t.textContent = 'U1  4558';
+  }
+}
+function arc(cx, cy, r, a) {
+  const s = a - 0.6, e = a + 0.6;
+  return `M ${cx + r * Math.cos(s)} ${cy + r * Math.sin(s)} A ${r} ${r} 0 0 1 ${cx + r * Math.cos(e)} ${cy + r * Math.sin(e)} L ${cx + (r - 5) * Math.cos(e)} ${cy + (r - 5) * Math.sin(e)} A ${r - 5} ${r - 5} 0 0 0 ${cx + (r - 5) * Math.cos(s)} ${cy + (r - 5) * Math.sin(s)} Z`;
+}
+
+const byId = Object.fromEntries(DATA.parts.map(p => [p.id, p]));
+function hole(c) { return String.fromCharCode(65 + c[0]) + (c[1] + 1); }
+function select(id) {
+  selected = id && (!selected || selected.id !== id) ? byId[id] : null;
+  draw(); showInfo();
+}
+function showInfo() {
+  const box = document.getElementById('info');
+  if (!selected) {
+    box.innerHTML = `<h2>Part</h2><div class="big">Pick a part</div><p>Click a part on the board or a row in the parts list. Its connections light up and everything else fades.</p><p class="hint">Holes are named by column letter and row number, A1 at the top-left of the component side.</p>`;
+    return;
+  }
+  const p = selected;
+  const pinNames = p.pinNames || p.pins.map((_, i) => p.pins.length === 2 ? ['lead 1', 'lead 2'][i] : 'pin ' + (i + 1));
+  const rows = p.pins.map((c, i) => `<li><b>${pinNames[i]}</b> → hole ${hole(c)} · ${DATA.netinfo[p.nets[i]]}</li>`).join('');
+  box.innerHTML = `<h2>${p.kind}</h2><div class="big">${p.id} <span class="val">${p.value}</span></div><p>${p.job}</p><ul>${rows}</ul>${p.tip ? `<p class="hint">${p.tip}</p>` : ''}`;
+}
+function legend() {
+  const lg = document.getElementById('legend');
+  const items = [['GND', 'Ground'], ['V9', '+9 V (after the protection diode)'], ['VB', '4.5 V bias'], [null, 'Signal nets get their own colours'], ['jump', 'Insulated wire (crosses other holes)']];
+  lg.innerHTML = items.map(([n, t]) => `<div class="sw" style="background:${n === 'jump' ? 'repeating-linear-gradient(90deg,var(--ink) 0 6px,transparent 6px 10px)' : n ? netColor(n) : 'linear-gradient(90deg,hsl(190 62% 45%),hsl(327 62% 45%),hsl(105 62% 45%))'}"></div><div>${t}</div>`).join('');
+}
+function tables() {
+  let done = {};
+  try { done = JSON.parse(localStorage.getItem('ts808done') || '{}'); } catch (e) {}
+  const tb = document.querySelector('#bom tbody');
+  tb.innerHTML = '';
+  for (const p of DATA.parts.filter(p => p.type !== 'PAD')) {
+    const tr = document.createElement('tr'); tr.dataset.id = p.id; if (done[p.id]) tr.className = 'done';
+    tr.innerHTML = `<td><input type="checkbox" id="chk-${p.id}" aria-label="${p.id} fitted" ${done[p.id] ? 'checked' : ''}></td><td class="m">${p.id}</td><td class="m">${p.value}</td><td>${p.short}</td>`;
+    tr.querySelector('input').addEventListener('click', e => {
+      e.stopPropagation(); done[p.id] = e.target.checked; tr.className = e.target.checked ? 'done' : '';
+      try { localStorage.setItem('ts808done', JSON.stringify(done)); } catch (err) {}
+    });
+    tr.addEventListener('click', () => { select(p.id); document.getElementById('board').scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+    tb.appendChild(tr);
+  }
+  const ob = document.querySelector('#offb tbody');
+  ob.innerHTML = DATA.parts.filter(p => p.type === 'PAD').map(p => `<tr data-id="${p.id}"><td class="m"><b>${p.code}</b> · ${hole(p.pins[0])}</td><td>${p.job}</td></tr>`).join('');
+  ob.querySelectorAll('tr').forEach(tr => tr.addEventListener('click', () => select(tr.dataset.id)));
+}
+function pinouts() {
+  document.getElementById('pinouts').innerHTML = `
+  <svg viewBox="0 0 120 92" width="150" role="img" aria-label="2SC1815 pinout, flat face toward you: E C B">
+    <path d="M20 46 A40 40 0 0 1 100 46 L100 52 L20 52 Z" fill="var(--body-q)"/>
+    <text x="60" y="40" font-size="10" fill="#eee" text-anchor="middle">C1815</text>
+    ${['E','C','B'].map((s,i)=>`<line x1="${36+i*24}" y1="52" x2="${36+i*24}" y2="74" stroke="#999" stroke-width="3"/><text x="${36+i*24}" y="88" font-size="12" font-weight="600" fill="var(--ink)" text-anchor="middle">${s}</text>`).join('')}
+  </svg>
+  <div class="hint" style="max-width:24ch">2SC1815, flat face toward you, legs down: <b>E C B</b>. The drawing marks E, C, B on each transistor's holes.</div>
+  <svg viewBox="0 0 120 110" width="140" role="img" aria-label="DIP-8 op-amp pinout">
+    <rect x="34" y="10" width="52" height="88" rx="3" fill="var(--body-u)"/>
+    <path d="M52 10 A8 8 0 0 0 68 10" fill="var(--panel)"/>
+    ${[1,2,3,4].map(i=>`<rect x="24" y="${12+i*18}" width="10" height="6" fill="#bbb"/><text x="18" y="${18+i*18}" font-size="10" text-anchor="end" fill="var(--ink)">${i}</text>`).join('')}
+    ${[8,7,6,5].map((n,i)=>`<rect x="86" y="${30+i*18}" width="10" height="6" fill="#bbb"/><text x="102" y="${36+i*18}" font-size="10" fill="var(--ink)">${n}</text>`).join('')}
+  </svg>
+  <div class="hint" style="max-width:26ch">Dual op-amp, notch up: 1 out A, 2 −A, 3 +A, 4 GND, 5 +B, 6 −B, 7 out B, 8 +9 V.</div>`;
+}
+function setSide(s) {
+  side = s;
+  try { localStorage.setItem('ts808side', s); } catch (e) {}
+  document.getElementById('v-front').setAttribute('aria-pressed', s === 'front');
+  document.getElementById('v-back').setAttribute('aria-pressed', s === 'back');
+  document.getElementById('sidehint').textContent = s === 'front' ? 'Looking at the parts. Wires underneath are shown faint.' : 'Board flipped over (mirrored left to right). This is the side you solder.';
+  draw();
+}
+document.getElementById('v-front').onclick = () => setSide('front');
+document.getElementById('v-back').onclick = () => setSide('back');
+svg.addEventListener('click', () => { if (selected) select(null); });
+legend(); tables(); pinouts(); setSide(side); showInfo();
+</script>
