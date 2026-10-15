@@ -4,3 +4,7 @@ node_modules/
 
 # scratch copies used while publishing layout pages
 work-*/
+
+# native engine build output and generated test fixtures
+native/target/
+native/tests/fixtures/

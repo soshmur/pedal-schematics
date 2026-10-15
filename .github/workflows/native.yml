@@ -1,0 +1,47 @@
+name: native engine
+
+on:
+  push:
+    branches: [main]
+    paths: ['native/**', 'js/engine.js', 'js/pedals.js', 'js/schematic.js', '.github/workflows/native.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  matches-js:
+    # the Rust engine must produce the same output as the browser engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - run: node native/tests/make_fixtures.mjs
+      - run: cargo test --release -- --nocapture
+        working-directory: native
+
+  windows:
+    needs: matches-js
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      # cpal's ASIO support downloads Steinberg's ASIO SDK and builds it with MSVC + LLVM (both on the runner)
+      - run: cargo build --release
+        working-directory: native
+      - run: native\target\release\pedal-engine.exe --list
+        shell: cmd
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pedal-engine-windows
+          path: native/target/release/pedal-engine.exe
+      - name: Publish to the "native-latest" release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view native-latest >/dev/null 2>&1 || \
+            gh release create native-latest --prerelease --title "Native engine (latest build)" \
+              --notes "Windows build of the low-latency engine. Download pedal-engine.exe, run it, then open the Pedal Schematics page and pick 'Native app (ASIO)'."
+          gh release upload native-latest native/target/release/pedal-engine.exe --clobber

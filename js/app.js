@@ -3,6 +3,7 @@ import { buildNetlist, renderSVG, toSpice } from './schematic.js';
 import { Circuit, logFreqs, DIODE_MODELS, BJT_MODELS, OPAMP_MODELS, BBD_MODELS, VT, bbdDelay } from './engine.js';
 import { parseValue, formatSI, formatValue, snapToSeries } from './units.js';
 import { AudioEngine } from './audio.js';
+import { NativeLink } from './native.js';
 import { drawResponse, drawScope } from './plots.js';
 
 const $ = (s) => document.querySelector(s);
@@ -102,8 +103,9 @@ audio.onStats = (s) => {
     status.textContent = 'The simulation is close to its time limit, so you may hear clicks. Try 1× oversampling.';
     status.className = 'status warn';
   } else {
-    const rate = Math.round(audio.ctx.sampleRate * s.os / 1000);
-    status.textContent = `Simulating at ${rate} kHz, ${s.itsPerSample.toFixed(1)} Newton iterations per sample, ${Math.round(s.load * 100)}% CPU.`;
+    const rate = Math.round((s.fs || audio.ctx.sampleRate * s.os) / 1000);
+    const where = s.native ? `Native app, ${s.block} sample buffer (${(s.block / s.sampleRate * 1000).toFixed(1)} ms): simulating` : 'Simulating';
+    status.textContent = `${where} at ${rate} kHz, ${s.itsPerSample.toFixed(1)} Newton iterations per sample, ${Math.round(s.load * 100)}% CPU.`;
     status.className = 'status';
   }
 };
@@ -133,16 +135,56 @@ function loadAudioPrefs() {
   let p = null;
   try { p = JSON.parse(localStorage.getItem(AUDIO_KEY) || 'null'); } catch { /* ignore */ }
   if (!p) return;
-  if (p.source && $(`#source option[value="${p.source}"]`)) $('#source').value = p.source;
+  // 'native' is picked again automatically once the app connects
+  if (p.source && p.source !== 'native' && $(`#source option[value="${p.source}"]`)) $('#source').value = p.source;
   if (p.inLevel) $('#inLevel').value = p.inLevel;
   if (p.outLevel) $('#outLevel').value = p.outLevel;
 }
 
 function showLiveUI() {
-  const live = $('#source').value === 'live';
+  const src = $('#source').value;
+  const live = src === 'live' || src === 'native';
   $('#live').hidden = !live;
   if (!audio.playing) $('#play').textContent = live ? 'Start' : 'Play';
 }
+
+// ---- native app (pedal-engine.exe): low-latency audio through the interface's ASIO driver
+
+const native = new NativeLink();
+audio.native = native;
+let nativePeak = 0;
+native.onStats = (s) => {
+  if (audio.kind !== 'native' || !audio.playing) return;
+  nativePeak = s.inPeak;
+  audio.onStats({ ...s, native: true });
+};
+native.onChange = (connected, info) => {
+  const opt = $('#source option[value="native"]');
+  opt.hidden = !connected;
+  opt.disabled = !connected;
+  const status = $('#status');
+  if (connected) {
+    // send everything the app needs, so Start is instant
+    audio.setNetlist(state.net);
+    audio.setBypass(state.bypass);
+    audio.setOversample(osFactor());
+    audio.setInputVolts(inputVolts());
+    audio.setOutputGain(monitorGain());
+    if (!audio.playing && ($('#source').value === 'live' || $('#source').value === 'native')) {
+      $('#source').value = 'native';
+      showLiveUI();
+    }
+    if (!audio.playing) {
+      status.className = 'status';
+      status.textContent = `Native app connected: ${info.driver} · ${info.input} · ${info.sampleRate / 1000} kHz. Press Start.`;
+    }
+  } else {
+    if (audio.kind === 'native' && audio.playing) stopPlayback();
+    if ($('#source').value === 'native') { $('#source').value = 'live'; showLiveUI(); }
+    status.className = 'status warn';
+    status.textContent = 'The native app closed. Using the browser for audio again.';
+  }
+};
 
 function liveError(err) {
   const status = $('#status');
@@ -227,6 +269,13 @@ function scopeLoop() {
   const inBuf = new Float32Array(2048), outBuf = new Float32Array(2048);
   const frame = () => {
     if (!audio.playing) { scopeRunning = false; return; }
+    if (audio.kind === 'native') {
+      // the native app reports its input level; the scope needs the browser's own audio
+      setMeter(nativePeak);
+      $('#scopeInfo').textContent = 'Scope is off while the native app is playing.';
+      requestAnimationFrame(frame);
+      return;
+    }
     audio.inTap.getFloatTimeDomainData(inBuf);
     audio.outTap.getFloatTimeDomainData(outBuf);
     let peak = 0;
@@ -841,6 +890,7 @@ function init() {
   loadAudioPrefs();
   showLevels();
   showLiveUI();
+  native.start();
   for (const r of document.querySelectorAll('input[name="os"]')) {
     r.addEventListener('change', () => audio.setOversample(osFactor()));
   }

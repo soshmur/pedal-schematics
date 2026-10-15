@@ -1,0 +1,31 @@
+[package]
+name = "pedal-engine"
+version = "0.1.0"
+edition = "2021"
+description = "Native (ASIO) audio engine for Pedal Schematics: runs the circuit simulation, controlled by the schematic page over a local WebSocket"
+license = "MIT"
+
+[lib]
+name = "pedal_engine"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pedal-engine"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+cpal = "0.15"
+tungstenite = "0.24"
+rtrb = "0.3"
+crossbeam-channel = "0.5"
+
+[target.'cfg(windows)'.dependencies]
+cpal = { version = "0.15", features = ["asio"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+debug = false

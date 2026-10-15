@@ -21,6 +21,7 @@ export class AudioEngine {
     this.latencyMode = 'lowest'; // 'lowest' | 'stable'
     this.stream = null;
     this.streamChannels = 0;
+    this.native = null;        // NativeLink to pedal-engine.exe, if the page has one
   }
 
   static get liveSupported() {
@@ -75,16 +76,24 @@ export class AudioEngine {
 
   setNetlist(net) {
     this.pendingNet = net;
-    if (!this.node) return;
     // strip editor-only fields before cloning to the audio thread
     const { nodeCount, output, elements } = net;
+    this.native?.send('netlist', { net: { nodeCount, output, elements } });
+    if (!this.node) return;
     this.node.port.postMessage({ type: 'netlist', net: { nodeCount, output, elements } });
   }
 
-  setBypass(on) { this.node?.port.postMessage({ type: 'bypass', on }); }
-  setOversample(f) { this.node?.port.postMessage({ type: 'oversample', factor: f }); }
-  setInputVolts(v) { if (this.node) this.node.parameters.get('inputVolts').setTargetAtTime(v, this.ctx.currentTime, 0.02); }
-  setOutputGain(g) { if (this.out) this.out.gain.setTargetAtTime(g, this.ctx.currentTime, 0.02); }
+  // The native app keeps its own copy of every setting, so it can take over at any time.
+  setBypass(on) { this.native?.send('bypass', { on }); this.node?.port.postMessage({ type: 'bypass', on }); }
+  setOversample(f) { this.native?.send('oversample', { factor: f }); this.node?.port.postMessage({ type: 'oversample', factor: f }); }
+  setInputVolts(v) {
+    this.native?.send('inputVolts', { v });
+    if (this.node) this.node.parameters.get('inputVolts').setTargetAtTime(v, this.ctx.currentTime, 0.02);
+  }
+  setOutputGain(g) {
+    this.native?.send('outputGain', { g });
+    if (this.out) this.out.gain.setTargetAtTime(g, this.ctx.currentTime, 0.02);
+  }
 
   async setOutputDevice(id) {
     this.outputId = id;
@@ -159,6 +168,15 @@ export class AudioEngine {
   /** Start a source: 'live', a demo clip key, or { file: File }. */
   async play(kind = this.kind) {
     if (kind === 'mic') kind = 'live';   // older pages called live input 'mic'
+    if (kind === 'native') {
+      if (!this.native?.connected) throw Object.assign(new Error('The native app isn’t running. Start pedal-engine.exe first.'), { name: 'NativeMissing' });
+      this._stopSource();
+      this.kind = 'native';
+      this.native.send('run', { on: true });
+      this.playing = true;
+      return;
+    }
+    this.native?.send('run', { on: false });
     this.kind = typeof kind === 'string' ? kind : 'file';
     if (kind === 'live') {
       if (!AudioEngine.liveSupported) throw Object.assign(new Error('insecure'), { name: 'NotSupportedError' });
@@ -211,6 +229,7 @@ export class AudioEngine {
   }
 
   stop() {
+    if (this.kind === 'native') this.native?.send('run', { on: false });
     this._stopSource();
     this.playing = false;
   }
