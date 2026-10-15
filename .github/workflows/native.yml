@@ -16,11 +16,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20 }
+        with: { node-version: 22 }
       - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - run: node native/tests/make_fixtures.mjs
-      - run: cargo test --release -- --nocapture
+      - name: cargo test
+        shell: bash
         working-directory: native
+        run: |
+          cargo test --release -- --nocapture 2>&1 | tee test.log; s=${PIPESTATUS[0]}
+          # surface the tail of the log as one annotation (readable without log access)
+          if [ $s -ne 0 ]; then echo "::error title=cargo test::$(tail -40 test.log | sed -e ':a;N;$!ba' -e 's/%/%25/g;s/\r//g;s/\n/%0A/g')"; fi
+          exit $s
 
   windows:
     needs: matches-js
@@ -28,8 +34,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # cpal's ASIO support downloads Steinberg's ASIO SDK and builds it with MSVC + LLVM (both on the runner)
-      - run: cargo build --release
+      - name: cargo build
+        shell: bash
         working-directory: native
+        run: |
+          cargo build --release 2>&1 | tee build.log; s=${PIPESTATUS[0]}
+          if [ $s -ne 0 ]; then echo "::error title=cargo build::$(grep -E 'error|warning: asio|panicked' build.log | tail -30 | sed -e ':a;N;$!ba' -e 's/%/%25/g;s/\r//g;s/\n/%0A/g')"; fi
+          exit $s
       - run: native\target\release\pedal-engine.exe --list
         shell: cmd
       - uses: actions/upload-artifact@v4

@@ -1,11 +1,12 @@
 // Writes each pedal's netlist plus the JS engine's output for a test signal, so the
 // Rust port can be checked against the reference implementation sample by sample.
 //   node native/tests/make_fixtures.mjs
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { Circuit } from '../../js/engine.js';
 import { PEDALS } from '../../js/pedals.js';
 import { buildNetlist } from '../../js/schematic.js';
 
+mkdirSync('native/tests/fixtures', { recursive: true });
 const FS = 96000, N = 9600 * 3;   // 0.3 s at 2x of 48 kHz
 const sig = new Float64Array(N);
 for (let i = 0; i < N; i++) {
