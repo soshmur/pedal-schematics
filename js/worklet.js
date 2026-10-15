@@ -46,15 +46,28 @@ class PedalProcessor extends AudioWorkletProcessor {
     }
   }
 
+  // The circuit runs at ~48 kHz × oversampling whatever the interface rate is:
+  // a 192 kHz interface would otherwise ask for 384k solver steps a second.
+  rates() {
+    const d = sampleRate > 50000 ? Math.round(sampleRate / 48000) : 1;  // 96k → 2, 192k → 4
+    const up = this.os >= d ? Math.round(this.os / d) : 1;               // solver steps per audio sample
+    const down = this.os >= d ? 1 : Math.round(d / this.os);             // audio samples per solver step
+    return { up, down, fs: sampleRate * up / down };
+  }
+
   build(net) {
-    const fs = sampleRate * this.os;
+    const { up, down, fs } = this.rates();
+    this.up = up; this.down = down; this.phase = 0; this.hold = 0;
     if (this.circuit && this.circuit.fs === fs) {
       this.circuit.update(net); // keeps state when only values changed
     } else {
       this.circuit = new Circuit(net, fs);
     }
-    // 4th-order Butterworth at 0.45·fs (only used when oversampling)
-    this.aa = [lowpass(sampleRate * 0.45, fs, 0.5412), lowpass(sampleRate * 0.45, fs, 1.3066)];
+    // 4th-order Butterworth at 0.45 × the lower of the two rates: decimation filter when
+    // oversampling, input anti-alias + output smoothing when the solver runs slower than the interface
+    const fc = 0.45 * Math.min(sampleRate, fs), fr = Math.max(sampleRate, fs);
+    this.aa = [lowpass(fc, fr, 0.5412), lowpass(fc, fr, 1.3066)];
+    this.sm = [lowpass(fc, sampleRate, 0.5412), lowpass(fc, sampleRate, 1.3066)];
     this.dcOffset = this.circuit.nodeVoltage(net.output);
   }
 
@@ -66,18 +79,23 @@ class PedalProcessor extends AudioWorkletProcessor {
     if (this.pending) { this.build(this.pending); this.pending = null; }
     const gain = params.inputVolts[0];
     const c = this.circuit;
-    const os = this.os;
+    const up = this.up || 1, down = this.down || 1;
     for (let i = 0; i < out.length; i++) {
       const x = (inp ? inp[i] : 0) * gain;
       let y;
       if (this.bypass || !c) {
         y = x;
-      } else if (os === 1) {
+      } else if (down > 1) {
+        // interface faster than the solver: band-limit, step every `down` samples, smooth the output
+        const xf = biquad(this.aa[1], biquad(this.aa[0], x));
+        if (++this.phase >= down) { this.phase = 0; this.hold = c.step(xf); }
+        y = biquad(this.sm[1], biquad(this.sm[0], this.hold));
+      } else if (up === 1) {
         y = c.step(x);
       } else {
         // linear-interpolated upsampling, filtered decimation
-        for (let k = 1; k <= os; k++) {
-          const xi = this.prevIn + (x - this.prevIn) * (k / os);
+        for (let k = 1; k <= up; k++) {
+          const xi = this.prevIn + (x - this.prevIn) * (k / up);
           y = biquad(this.aa[1], biquad(this.aa[0], c.step(xi)));
         }
       }
@@ -101,6 +119,7 @@ class PedalProcessor extends AudioWorkletProcessor {
         type: 'stats',
         load,
         os: this.os,
+        fs: c.fs,
         failures: c.stats.failures,
         steps: c.stats.steps,
         itsPerSample: c.stats.steps ? c.stats.iterations / c.stats.steps : 0,
