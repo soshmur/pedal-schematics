@@ -39,6 +39,30 @@ Browsers can't use ASIO, so expect roughly 10–30 ms on Windows (WASAPI) and le
 on macOS. Setting the interface to 48 kHz with a small buffer in its own control
 panel helps. Live input needs https or localhost; GitHub Pages is https.
 
+## Low-latency native app (Windows, ASIO)
+
+Browsers can't use ASIO, so in the browser expect 15–30 ms between playing and
+hearing. For a delay you can't feel (about 3–8 ms), run the native engine and
+keep using this page as the control panel:
+
+1. Install your interface's own driver (it includes ASIO). Check it's there in
+   PowerShell: `Get-ChildItem HKLM:\SOFTWARE\ASIO | Select-Object -ExpandProperty PSChildName`
+2. In the driver's control panel set **48 kHz** and a buffer of **64 or 128** samples.
+3. Download **pedal-engine.exe** from the
+   [native-latest release](https://github.com/soshmur/pedal-schematics/releases/tag/native-latest)
+   and run it. Windows may warn that it's unrecognised: More info → Run anyway.
+   It opens a console window that shows the driver, buffer size and expected delay.
+4. Open the page (`npm start`, then http://localhost:8000). The input switches to
+   **Native app (ASIO, low latency)** by itself. Press **Start**.
+
+Everything on the page (pedal choice, part edits, knobs, bypass, levels,
+oversampling) is mirrored to the app. Close the console window to stop it.
+Options: `pedal-engine --list`, `--device NAME`, `--buffer 64`, `--host wasapi`.
+
+The app is `native/`: a line-by-line Rust port of `js/engine.js`'s solver.
+`node native/tests/make_fixtures.mjs && cd native && cargo test --release`
+checks it against the JS engine sample for sample on every pedal.
+
 ## How it works
 
 There's no hand-written DSP per pedal. Each pedal is only a drawing — parts
