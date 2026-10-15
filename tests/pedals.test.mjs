@@ -52,6 +52,21 @@ test('Booster: transistor bias and gain ≈ R3/R4', () => {
   assert.ok(mag[0] > 24 && mag[0] < 29, 'gain ' + mag[0]); // ≈ 20log(10k/390)=28 minus loading
 });
 
+test('Electra: collector-feedback bias, then diodes clamp the output', () => {
+  const def = pedalByKey('electra');
+  const net = buildNetlist(def, { knobs: { VR1: 1 } });
+  const c = new Circuit(net, FS);
+  const vc = pinVoltage(def, c, net, 'Q1', 0);
+  assert.ok(vc > 5.5 && vc < 8, 'collector ' + vc); // 0.65 V + Ic·(R2 + R1/hFE) with Ic = (9 − Vc)/R3
+  // a loud note is clamped near the Schottky drop (~0.3 V) at full volume
+  let peak = 0;
+  for (let i = 0; i < FS / 2; i++) {
+    const y = c.step(0.5 * Math.sin(2 * Math.PI * 220 * i / FS));
+    if (i > FS / 4) peak = Math.max(peak, Math.abs(y));
+  }
+  assert.ok(peak > 0.15 && peak < 0.45, 'clipped peak ' + peak);
+});
+
 test('Fuzz Face: Q2 collector sits mid-supply-ish', () => {
   const def = pedalByKey('fuzz');
   const net = buildNetlist(def);

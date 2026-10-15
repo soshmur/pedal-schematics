@@ -29,6 +29,7 @@ export const DIODE_MODELS = {
   '1N4148': { label: '1N4148 silicon', Is: 4.35e-9, n: 1.906 },
   '1N34A': { label: '1N34A germanium', Is: 2.0e-7, n: 1.3 },
   'BAT41': { label: 'BAT41 Schottky', Is: 1.0e-8, n: 1.05 },
+  '1N5819': { label: '1N5819 Schottky', Is: 5.0e-7, n: 1.1 },
   'LED': { label: 'Red LED', Is: 9.3e-20, n: 1.6 },
 };
 

@@ -6,12 +6,13 @@ a real circuit simulation running in your browser.
 
 **Live:** https://soshmur.github.io/pedal-schematics/
 
-Six circuits to start from:
+Seven circuits to start from:
 
 | Pedal | Based on | Try changing |
 |---|---|---|
 | Booster | EHX LPB-1 | R4 (emitter resistor) sets the gain; C1 sets the bass |
 | Fuzz Face | Dallas Arbiter Fuzz Face | hFE, germanium vs silicon, the Bias trimmer |
+| Electra | Electra / Mike Matthews one-transistor distortion | R2 for gain, D1/D2 Schottky vs silicon |
 | Screamer | Ibanez TS808 clipping stage | D1/D2 → LEDs or germanium; R3/C2 move the mid hump |
 | Rodent | ProCo RAT | the op-amp chip (slew rate!), R2/R3 gain legs, clipping diodes |
 | Analog Delay | Boss DM-2 | the BBD chip (1024–4096 stages), its clock, R5 for runaway repeats |
