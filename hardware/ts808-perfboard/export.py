@@ -54,8 +54,8 @@ TIP = {
  'Q':'Flat face toward the side drawn flat. E, C and B are marked on the holes.',
 }
 PADTXT = {
- 'IN':('IN','Input jack tip (sleeve to ground)'), '9V':('9V','DC jack +9 V (the sleeve lug on a centre-negative jack)'),
- 'G':('GND','Ground: DC jack centre pin (−), input and output jack sleeves'), 'OUT':('OUT','Output jack tip'),
+ 'IN':('IN','3PDT lug 5 (see the wiring diagram)'), '9V':('9V','DC jack +9 V (the sleeve lug on a centre-negative jack)'),
+ 'G':('GND','Ground: DC socket centre pin, both jack sleeves, 3PDT lugs 3 and 8'), 'OUT':('OUT','3PDT lug 1 (see the wiring diagram)'),
  'D1p':('DRV 1','Drive pot (500k) lug 1'), 'D2p':('DRV 2','Drive pot lug 2 (wiper). Leave lug 3 unconnected or tie it to lug 2'),
  'T1':('TONE 1','Tone pot (20k B) lug 1'), 'T2':('TONE 2','Tone pot lug 2 (wiper)'), 'T3':('TONE 3','Tone pot lug 3'),
  'V3':('LVL 3','Level pot (100k A) lug 3'), 'V2':('LVL 2','Level pot lug 2 (wiper)'), 'V1':('LVL 1','Level pot lug 1 (ground)'),

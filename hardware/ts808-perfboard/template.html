@@ -64,6 +64,10 @@ tr.done td { color: var(--muted); text-decoration: line-through; }
 tr[data-id] { cursor: pointer; }
 tr[data-id]:hover td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+.wrap > * { min-width: 0; }
+ul.wnotes { padding-left: 20px; margin: 12px 0 0; display: grid; gap: 6px; max-width: 80ch; font-size: 14px; }
+#wiring { display: block; width: 100%; min-width: 640px; height: auto; }
+#wiring text { font-family: var(--mono); }
 ol.steps { padding-left: 20px; margin: 0; display: grid; gap: 8px; max-width: 75ch; }
 .note { border-left: 3px solid var(--warn); padding: 6px 12px; background: color-mix(in srgb, var(--warn) 8%, transparent); font-size: 14px; max-width: 75ch; }
 .pinout { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
@@ -127,13 +131,27 @@ ol.steps { padding-left: 20px; margin: 0; display: grid; gap: 8px; max-width: 75
 </section>
 
 <section>
+  <h2 class="sec">Wiring: pots, jacks and footswitch</h2>
+  <p class="hint" style="max-width:75ch;margin:0 0 10px">Pots and switch are drawn from the back, the side you solder. Board pads are where they sit on the component side. Wires to <b>GND</b> can all join the ground pad G, or a bare wire run across the jacks.</p>
+  <div class="svgbox"><svg id="wiring" viewBox="0 0 1000 720" role="img" aria-label="Off-board wiring: pots, jacks, DC socket and 3PDT footswitch"></svg></div>
+  <ul class="wnotes">
+    <li><b>Pot lugs, from the back</b> (shaft pointing away, lugs at the bottom): <b>3 · 2 · 1</b> left to right. From the front they read 1 · 2 · 3. Turning clockwise moves the wiper (lug 2) toward lug 3.</li>
+    <li><b>Drive:</b> join lugs 2 and 3 with a short wire. Clockwise = more drive. <b>Tone:</b> clockwise = brighter. <b>Level:</b> clockwise = louder.</li>
+    <li><b>3PDT:</b> the middle row (4, 5, 6) is the three commons. Pressing the switch flips every common between the row above and the row below. In one position the guitar goes through the board and the LED lights. In the other, the input jack goes straight to the output jack and the board input is grounded, which keeps it quiet.</li>
+    <li>Check your switch before wiring: with a multimeter on continuity, lug 5 should beep to lug 2 or lug 8 and never to 4 or 6. If it beeps to 4 or 6, turn the switch 90°.</li>
+    <li><b>LED:</b> long leg (anode) to the 4.7k resistor, short leg (flat side) to lug 6. Use 2.2k for a brighter LED.</li>
+    <li><b>DC socket (2.1 mm, centre negative):</b> the centre pin is ground, the outer sleeve is +9 V. Find which lug is which with the multimeter.</li>
+  </ul>
+</section>
+
+<section>
   <h2 class="sec">Build order</h2>
   <ol class="steps">
     <li>Fit the <b>wire links on the back</b> first, while the board is empty. Short runs can be bent component leads or solder bridges. Use insulated wire where a link jumps over other holes (dashed on the drawing).</li>
     <li>Low parts next: <b>diodes</b> (stripe = cathode, match the band on the drawing), then <b>resistors</b>.</li>
     <li>The <b>DIP-8 socket</b> with its notch at the end shown. Don't solder the chip itself.</li>
     <li><b>Film caps</b>, then <b>transistors</b> (flat face as drawn), then <b>electrolytics</b> (+ leg on the hole marked +).</li>
-    <li>Off-board wires to the pots, jacks and DC socket. The pots are seen from the back (lugs facing you, shaft away).</li>
+    <li>Off-board wires to the pots, jacks, DC socket and footswitch, following the wiring diagram above.</li>
     <li>Before fitting the chip, power up and check: socket pin 8 ≈ 8.4 V, Volume lug 1 ≈ 4.2 V (half the supply). Then power off, fit the op-amp, and check pins 1, 2, 3, 5, 6, 7 all sit near that same half-supply voltage.</li>
   </ol>
   <p class="note">Any dual op-amp in an 8-pin DIP works: JRC4558D for the classic sound, TL072 or NE5532 are fine substitutes. If you use a transistor other than the 2SC1815, check its pin order: 2N3904, BC547 and S8050 are E-B-C, so turn or cross the legs to land E, C and B on the holes marked.</p>
@@ -375,5 +393,129 @@ function setSide(s) {
 document.getElementById('v-front').onclick = () => setSide('front');
 document.getElementById('v-back').onclick = () => setSide('back');
 svg.addEventListener('click', () => { if (selected) select(null); });
-legend(); tables(); pinouts(); setSide(side); showInfo();
+
+// ---- off-board wiring diagram (pots, jacks, DC socket, 3PDT, LED)
+function drawWiring() {
+  const svg = document.getElementById('wiring');
+  if (!svg) return;
+  svg.innerHTML = '';
+  const bodies = el('g', {}, svg), wires = el('g', {}, svg), tops = el('g', {}, svg);
+  const T = (x, y, s, o = {}) => {
+    const e = el('text', { x, y, 'font-size': o.size || 12, 'text-anchor': o.anchor || 'middle', fill: o.fill || 'var(--ink)', 'font-weight': o.bold ? 700 : 400, 'dominant-baseline': 'central', 'paint-order': 'stroke', stroke: o.halo || 'var(--panel)', 'stroke-width': 3 }, o.g || tops);
+    e.textContent = s; return e;
+  };
+  const pads = Object.fromEntries(DATA.parts.filter(p => p.type === 'PAD').map(p => [p.code, p.pins[0]]));
+  const B = { x: 70, y: 250, p: 12 };
+  const P = (code) => [B.x + pads[code][0] * B.p, B.y + pads[code][1] * B.p];
+  const C = { a: '#1f77b4', b: '#d97706', c: '#2a9d8f', d: '#9b5de5', e: '#e76f51', f: '#0a9396', g: '#c2185b', h: '#6a994e', i: '#5e60ce', v9: 'var(--v9)', gnd: 'var(--gnd)' };
+  const run = (pts, color) => el('polyline', { points: pts.map(p => p.join(',')).join(' '), fill: 'none', stroke: color, 'stroke-width': 3, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, wires);
+  const curve = (a, b, color) => el('path', { d: `M ${a[0]} ${a[1]} C ${a[0]} ${a[1] - 60} ${b[0]} ${b[1] + 70} ${b[0]} ${b[1]}`, fill: 'none', stroke: color, 'stroke-width': 3, 'stroke-linecap': 'round' }, wires);
+  const curveR = (a, b, color) => el('path', { d: `M ${a[0]} ${a[1]} C ${a[0] + 90} ${a[1]} ${b[0]} ${b[1] + 90} ${b[0]} ${b[1]}`, fill: 'none', stroke: color, 'stroke-width': 3, 'stroke-linecap': 'round' }, wires);
+  const dot = (p) => el('circle', { cx: p[0], cy: p[1], r: 4.5, fill: 'var(--ink)' }, tops);
+  const lug = (p) => el('circle', { cx: p[0], cy: p[1], r: 5.5, fill: '#cfcfcf', stroke: '#666', 'stroke-width': 1.5 }, tops);
+  const gnd = (p, len = 14) => {
+    const [x, y] = p;
+    el('line', { x1: x, y1: y, x2: x, y2: y + len, stroke: 'var(--gnd)', 'stroke-width': 3 }, wires);
+    for (const [w, dy] of [[18, 0], [12, 5], [6, 10]]) el('line', { x1: x - w / 2, y1: y + len + dy, x2: x + w / 2, y2: y + len + dy, stroke: 'var(--gnd)', 'stroke-width': 2.5 }, tops);
+  };
+  const box = (x, y, w, h, title, sub) => {
+    el('rect', { x, y, width: w, height: h, rx: 8, fill: 'var(--panel)', stroke: 'var(--muted)', 'stroke-width': 2 }, bodies);
+    T(x + w / 2, y + h / 2 - 8, title, { size: 12, bold: true }); T(x + w / 2, y + h / 2 + 9, sub, { size: 10, fill: 'var(--muted)' });
+  };
+
+  // board with its wire pads
+  el('rect', { x: B.x - 14, y: B.y - 14, width: 17 * B.p + 28, height: 23 * B.p + 28, rx: 6, fill: 'var(--board)', stroke: 'var(--board-edge)', 'stroke-width': 2 }, bodies);
+  T(B.x + 8.5 * B.p, B.y + 11 * B.p, 'TS808 board', { size: 14, bold: true, halo: 'var(--board)' });
+  T(B.x + 8.5 * B.p, B.y + 11 * B.p + 18, 'component side up', { size: 11, fill: 'var(--muted)', halo: 'var(--board)' });
+  for (const code of Object.keys(pads)) {
+    const [x, y] = P(code);
+    el('rect', { x: x - 12, y: y - 8, width: 24, height: 16, rx: 3, fill: 'var(--copper-hi)', stroke: '#7a4a1e' }, tops);
+    T(x, y, code, { size: 8, bold: true, fill: '#3a2410', halo: 'var(--copper-hi)' });
+  }
+
+  // pots, back view: lug 3 left, 1 right
+  const pot = (cx, name, val) => {
+    el('circle', { cx, cy: 78, r: 40, fill: 'var(--panel)', stroke: 'var(--muted)', 'stroke-width': 2 }, bodies);
+    T(cx, 70, name, { size: 13, bold: true }); T(cx, 88, val, { size: 11, fill: 'var(--muted)' });
+    const L = {};
+    [[3, -24], [2, 0], [1, 24]].forEach(([n, dx]) => {
+      el('rect', { x: cx + dx - 3, y: 116, width: 6, height: 22, fill: '#cfcfcf', stroke: '#777' }, bodies);
+      L[n] = [cx + dx, 142];
+      lug(L[n]);
+      T(cx + dx + 11, 128, String(n), { size: 11, bold: true });
+    });
+    return L;
+  };
+  T(290, 16, 'pots from the back (shaft away, lugs down): 3 · 2 · 1', { size: 12, fill: 'var(--muted)' });
+  const drive = pot(110, 'Drive', '500k A'), tone = pot(290, 'Tone', '20k B'), level = pot(470, 'Level', '100k A');
+
+  // 3PDT, lug side, 60 px pitch
+  const sw = {};
+  el('rect', { x: 605, y: 305, width: 190, height: 190, rx: 14, fill: 'var(--panel)', stroke: 'var(--muted)', 'stroke-width': 2 }, bodies);
+  for (let n = 1; n <= 9; n++) {
+    const c = (n - 1) % 3, r = Math.floor((n - 1) / 3);
+    sw[n] = [640 + c * 60, 340 + r * 60];
+  }
+  T(700, 262, '3PDT footswitch, lug side', { size: 12, bold: true });
+
+  // jacks, DC socket
+  box(470, 620, 120, 60, 'Output jack', '¼" mono');
+  const outTip = [500, 605], outSl = [570, 605];
+  box(850, 620, 120, 60, 'Input jack', '¼" mono');
+  const inTip = [880, 605], inSl = [950, 605];
+  box(850, 50, 120, 60, 'DC socket', '2.1 mm, centre −');
+  const dcPlus = [870, 125], dcMinus = [950, 125];
+
+  // pots <- board
+  run([drive[3], [drive[3][0], 158], [drive[2][0], 158], drive[2]], 'var(--ink)');
+  curve(P('DR1'), drive[1], C.a);
+  curve(P('DR2'), drive[2], C.b);
+  curve(P('TN2'), tone[2], C.c);
+  curve(P('TN1'), tone[1], C.d);
+  curveR(P('TN3'), tone[3], C.e);
+  curve(P('LV1'), level[1], C.f);
+  curveR(P('LV2'), level[2], C.g);
+  curveR(P('LV3'), level[3], C.h);
+
+  // audio through the switch
+  run([P('OUT'), [430, P('OUT')[1]], [430, sw[1][1]], sw[1]], C.a);                           // board OUT -> 1
+  run([P('IN'), [P('IN')[0], 545], [670, 545], [670, sw[5][1]], sw[5]], C.b);                 // board IN  -> 5
+  run([sw[4], [500, sw[4][1]], outTip], C.c);                                                 // 4 -> output tip
+  run([sw[2], [sw[2][0], 285], [inTip[0], 285], inTip], C.d);                                 // 2 -> input tip
+  run([sw[7], [sw[7][0], 520], [inTip[0], 520]], C.d); dot([inTip[0], 520]);                 // 7 -> input tip (bypass)
+  // LED on the third pole
+  run([sw[6], [805, sw[6][1]]], C.e);
+  el('path', { d: `M 805 ${sw[6][1]} L 829 ${sw[6][1] - 12} L 829 ${sw[6][1] + 12} Z`, fill: '#e63946', stroke: '#7a1e25' }, tops);
+  el('line', { x1: 805, y1: sw[6][1] - 12, x2: 805, y2: sw[6][1] + 12, stroke: '#7a1e25', 'stroke-width': 3 }, tops);
+  T(817, sw[6][1] + 26, 'LED', { size: 11, bold: true });
+  T(796, sw[6][1] - 22, 'short leg', { size: 9, fill: 'var(--muted)' });
+  run([[829, sw[6][1]], [930, sw[6][1]], [930, 330]], C.e);
+  el('rect', { x: 922, y: 250, width: 16, height: 80, rx: 4, fill: 'var(--body-r)', stroke: '#7d6a45' }, bodies);
+  T(914, 290, '4.7k', { size: 11, bold: true, anchor: 'end' });
+  run([[930, 250], [930, 180], [dcPlus[0], 180], dcPlus], C.v9);
+  // power: board 9V pad to the DC socket
+  run([P('9V'), [P('9V')[0], 575], [985, 575], [985, 180], [930, 180]], C.v9); dot([930, 180]);
+  // grounds (all join the board's G pad)
+  run([P('G'), [36, P('G')[1]]], C.gnd); gnd([36, P('G')[1]]);
+  run([sw[3], [800, sw[3][1]]], C.gnd); gnd([800, sw[3][1]]);
+  gnd(sw[8], 22);
+  run([outSl, [605, outSl[1]]], C.gnd); gnd([605, outSl[1]]);
+  run([inSl, [985, inSl[1]]], C.gnd); gnd([985, inSl[1]]);
+  gnd(dcMinus, 12);
+
+  // switch lugs and jack lugs on top of the wires
+  for (let n = 1; n <= 9; n++) {
+    const [x, y] = sw[n], common = n >= 4 && n <= 6;
+    el('rect', { x: x - 11, y: y - 11, width: 22, height: 22, rx: 4, fill: common ? '#ecd9a0' : '#dcdcdc', stroke: '#666', 'stroke-width': 1.5 }, tops);
+    el('text', { x, y, 'font-size': 11, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: '#222', 'font-weight': 700 }, tops).textContent = n;
+  }
+  for (const [p, s, dx, dy] of [[outTip, 'Tip', -22, 0], [outSl, 'Sleeve', 0, -16], [inTip, 'Tip', -22, 0], [inSl, 'Sleeve', 0, -16], [dcPlus, '+9V', -24, 0], [dcMinus, '−', 14, -6]]) {
+    lug(p); T(p[0] + dx, p[1] - 2 + dy, s, { size: 11, bold: true });
+  }
+  T(442, 452, 'board OUT → 1', { size: 10, anchor: 'start', fill: 'var(--muted)' });
+  T(560, 558, 'board IN → 5', { size: 10, anchor: 'start', fill: 'var(--muted)' });
+  T(500, 700, 'Ground symbols all join the board’s G pad (or a bare wire across the jack sleeves).', { size: 11, fill: 'var(--muted)' });
+}
+
+legend(); tables(); pinouts(); drawWiring(); setSide(side); showInfo();
 </script>
