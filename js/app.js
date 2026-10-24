@@ -1,6 +1,6 @@
 import { PEDALS, pedalByKey } from './pedals.js';
 import { buildNetlist, renderSVG, toSpice } from './schematic.js';
-import { Circuit, logFreqs, DIODE_MODELS, BJT_MODELS, OPAMP_MODELS, BBD_MODELS, VT, bbdDelay } from './engine.js';
+import { Circuit, logFreqs, DIODE_MODELS, BJT_MODELS, OPAMP_MODELS, BBD_MODELS, MOSFET_MODELS, VT, bbdDelay } from './engine.js';
 import { parseValue, formatSI, formatValue, snapToSeries } from './units.js';
 import { AudioEngine } from './audio.js';
 import { NativeLink } from './native.js';
@@ -538,6 +538,10 @@ function artFor(p) {
         <rect x="30" y="8" width="140" height="56" rx="4" fill="#1d1d1d"/><circle cx="44" cy="22" r="4" fill="#3a3a3a"/>
         <text x="100" y="42" fill="#ddd" font-size="17" font-weight="700" text-anchor="middle">${esc(m)}</text></svg>`;
     }
+    case 'M': {
+      const m = e.models[p.id] ?? p.model;
+      return `<svg viewBox="0 0 120 80" width="120" height="80" aria-hidden="true"><path d="M30 50V24a30 30 0 0 1 60 0V50Z" fill="#1d1d1d"/><text x="60" y="36" text-anchor="middle" font-size="12" font-weight="700" fill="#ddd">${esc(m)}</text><path d="M46 50v30M60 50v30M74 50v30" stroke="#9aa5ab" stroke-width="3"/><text x="46" y="78" font-size="9" fill="#666" text-anchor="middle">S</text><text x="60" y="78" font-size="9" fill="#666" text-anchor="middle">G</text><text x="74" y="78" font-size="9" fill="#666" text-anchor="middle">D</text></svg>`;
+    }
     case 'Q': {
       const ge = (e.models[p.id] ?? p.model) === 'Ge';
       return ge
@@ -550,13 +554,14 @@ function artFor(p) {
 
 // ---------------------------------------------------------------- editor
 
-const KIND = { R: 'Resistor', C: 'Capacitor', D: 'Diode', Q: 'Transistor', POT: 'Potentiometer', OA: 'Op-amp', BBD: 'Bucket-brigade delay' };
+const KIND = { R: 'Resistor', C: 'Capacitor', D: 'Diode', Q: 'Transistor', M: 'MOSFET', POT: 'Potentiometer', OA: 'Op-amp', BBD: 'Bucket-brigade delay' };
 const RANGE = { R: [1, 10e6], POT: [100, 10e6], C: [1e-12, 1e-3], BBD: [1e3, 2e6] };
 
 function pinNames(p) {
   switch (p.type) {
     case 'D': return ['Anode', 'Cathode'];
     case 'Q': return ['Collector', 'Base', 'Emitter'];
+    case 'M': return ['Drain', 'Gate', 'Source'];
     case 'OA': return ['Inverting in (−)', 'Non-inverting in (+)', 'Output'];
     case 'BBD': return ['Audio in', 'Audio out', 'Clock CV'];
     case 'POT': return p.ccw ? ['Clockwise end', 'Anticlockwise end', 'Wiper'] : ['Anticlockwise end', 'Clockwise end', 'Wiper'];
@@ -626,6 +631,12 @@ function renderEditor() {
       <label><input type="radio" name="dmodel" value="none" ${m === 'none' ? 'checked' : ''}><span>Remove it</span><small>open circuit</small></label>
     </div></fieldset>`;
   }
+  if (p.type === 'M') {
+    const m = e.models[p.id] ?? p.model;
+    body = `<fieldset><legend>Part</legend><div class="options">
+      ${Object.entries(MOSFET_MODELS).map(([k, f]) => `<label><input type="radio" name="mmodel" value="${k}" ${m === k ? 'checked' : ''}><span>${esc(f.label)}</span><small>switches on at ${f.vth} V gate-source; body diode ${vf(f).toFixed(2)} V</small></label>`).join('')}
+    </div></fieldset>`;
+  }
   if (p.type === 'Q') {
     const m = e.models[p.id] ?? p.model;
     const h = e.hfe[p.id] ?? p.hfe;
@@ -684,6 +695,7 @@ function refreshPins() {
   const fmt = (x, d = 2) => (Math.abs(x) < 0.5 * Math.pow(10, -d) ? 0 : x).toFixed(d);
   if (p.type === 'Q') extra = `<dt>V<sub>BE</sub> / V<sub>CE</sub></dt><dd>${fmt(v[1] - v[2])} V / ${fmt(v[0] - v[2])} V</dd>`;
   if (p.type === 'D') extra = `<dt>Across it</dt><dd>${fmt(v[0] - v[1], 3)} V</dd>`;
+  if (p.type === 'M') extra = `<dt>V<sub>GS</sub> / V<sub>DS</sub></dt><dd>${fmt(v[1] - v[2])} V / ${fmt(v[0] - v[2])} V</dd>`;
   if (p.type === 'BBD') {
     const el = state.net.elements.find((x) => x.id === p.id);
     extra = `<dt>Delay at this clock CV</dt><dd>${(bbdDelay(el.model, v[2]) * 1000).toFixed(1)} ms</dd>`;
@@ -789,7 +801,7 @@ function bindEditor() {
     }
     if (t.name === 'snap') { state.snap = t.value; persist(); }
     if (t.name === 'taper') { edits().tapers[id] = t.value; update(); renderEditor(); }
-    if (t.name === 'dmodel' || t.name === 'qmodel' || t.name === 'oamodel' || t.name === 'bbdmodel') {
+    if (t.name === 'dmodel' || t.name === 'qmodel' || t.name === 'mmodel' || t.name === 'oamodel' || t.name === 'bbdmodel') {
       edits().models[id] = t.value;
       update();
       renderEditor();

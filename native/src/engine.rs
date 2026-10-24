@@ -86,6 +86,8 @@ struct Diode { a: isize, k: isize, is: f64, vt: f64, vcrit: f64, vd: f64 }
 #[derive(Clone)]
 struct Bjt { c: isize, b: isize, e: isize, is: f64, bf: f64, br: f64, pol: f64, vcrit: f64, vbe: f64, vbc: f64 }
 #[derive(Clone)]
+struct Fet { d: isize, g: isize, s: isize, vth: f64, kp: f64, lambda: f64, vgs: f64, vds: f64 }
+#[derive(Clone)]
 struct Opamp { p: isize, n: isize, o: isize, z: isize, gm: f64, imax: f64, vmid: f64, vsat: f64, row: isize, vzl: Option<f64> }
 #[derive(Clone)]
 struct Cmp { p: isize, n: isize, o: isize, vmid: f64, vsat: f64, row: isize, held: f64 }
@@ -117,6 +119,19 @@ fn pnjlim(vnew: f64, vold: f64, vt: f64, vcrit: f64) -> f64 {
         return vt * (vnew / vt).ln();
     }
     vnew
+}
+
+/// Drain current and its derivatives (gm, gds) for vds >= 0 (square law).
+fn mosfet_id(f: &Fet, vgs: f64, vds: f64) -> (f64, f64, f64) {
+    let vov = vgs - f.vth;
+    if vov <= 0.0 { return (0.0, 0.0, 0.0); }
+    let cl = 1.0 + f.lambda * vds;
+    if vds < vov {
+        let core = vov * vds - vds * vds / 2.0;
+        (f.kp * core * cl, f.kp * vds * cl, f.kp * (vov - vds) * cl + f.kp * core * f.lambda)
+    } else {
+        (f.kp / 2.0 * vov * vov * cl, f.kp * vov * cl, f.kp / 2.0 * vov * vov * f.lambda)
+    }
 }
 
 fn bbd_clock(m: &BbdModel, cv: f64) -> f64 {
@@ -254,7 +269,7 @@ pub struct Circuit {
     big_n: usize,
     out: isize,
     res: Vec<Res>, caps: Vec<Cap>, vsrc: Vec<Vsrc>, diodes: Vec<Diode>, bjts: Vec<Bjt>,
-    opamps: Vec<Opamp>, cmps: Vec<Cmp>, bbds: Vec<Bbd>, input: Option<Input>,
+    opamps: Vec<Opamp>, cmps: Vec<Cmp>, bbds: Vec<Bbd>, fets: Vec<Fet>, input: Option<Input>,
     n: usize,
     pub x: Vec<f64>,
     a: Vec<f64>, b: Vec<f64>, base: Vec<f64>, x_old: Vec<f64>,
@@ -271,7 +286,7 @@ impl Circuit {
             fs, trap: true, abstol: 1e-5, stats: Stats::default(), dc_converged: false,
             signature: String::new(), big_n: 0, out: -1,
             res: vec![], caps: vec![], vsrc: vec![], diodes: vec![], bjts: vec![], opamps: vec![],
-            cmps: vec![], bbds: vec![], input: None, n: 0, x: vec![], a: vec![], b: vec![], base: vec![],
+            cmps: vec![], bbds: vec![], fets: vec![], input: None, n: 0, x: vec![], a: vec![], b: vec![], base: vec![],
             x_old: vec![], nonlinear: false, sparse: None, rhs_buf: vec![], saved: Saved::default(), vin_prev: None,
         };
         c.build(net, false)?;
@@ -305,7 +320,7 @@ impl Circuit {
         let old_bbds = if keep_state { std::mem::take(&mut self.bbds) } else { vec![] };
         let old_cmps = if keep_state { std::mem::take(&mut self.cmps) } else { vec![] };
         self.res.clear(); self.vsrc.clear(); self.diodes.clear(); self.bjts.clear();
-        self.opamps.clear(); self.bbds.clear(); self.cmps.clear();
+        self.opamps.clear(); self.bbds.clear(); self.cmps.clear(); self.fets.clear();
         self.input = None;
         for e in &net.elements {
             let nd: Vec<isize> = e.nodes.iter().map(|&n| idx(n)).collect();
@@ -332,6 +347,15 @@ impl Circuit {
                         bf: num(&e.model, "bf", 100.0), br: num(&e.model, "br", 1.0), pol: num_or(&e.model, "pol", 1.0),
                         vcrit: VT * (VT / (std::f64::consts::SQRT_2 * is)).ln(), vbe: 0.0, vbc: 0.0,
                     });
+                }
+                "M" => {
+                    let (d, g, sn) = (node(0)?, node(1)?, node(2)?);
+                    self.fets.push(Fet { d, g, s: sn, vth: num(&e.model, "vth", 2.0), kp: num(&e.model, "kp", 0.1),
+                        lambda: num(&e.model, "lambda", 0.02), vgs: 0.0, vds: 0.0 });
+                    // body diode: anode at the source, cathode at the drain
+                    let is = num(&e.model, "Is", 1e-12);
+                    let vt = num(&e.model, "n", 1.25) * VT;
+                    self.diodes.push(Diode { a: sn, k: d, is, vt, vcrit: vt * (vt / (std::f64::consts::SQRT_2 * is)).ln(), vd: 0.0 });
                 }
                 "OA" => {
                     let a = num(&e.model, "A", 1e5);
@@ -383,7 +407,7 @@ impl Circuit {
         self.base = vec![0.0; n * n];
         self.x_old = vec![0.0; n];
         if self.rhs_buf.len() != n { self.rhs_buf = vec![0.0; n]; }
-        self.nonlinear = !(self.diodes.is_empty() && self.bjts.is_empty() && self.opamps.is_empty());
+        self.nonlinear = !(self.diodes.is_empty() && self.bjts.is_empty() && self.opamps.is_empty() && self.fets.is_empty());
         self.sparse = None;
         // a value edit can change a delay chip's size: resize its line, keep its output
         let fs = self.fs;
@@ -452,6 +476,7 @@ impl Circuit {
         for c in &self.caps { mark(&[c.a, c.b]); }
         for d in &self.diodes { mark(&[d.a, d.k]); }
         for q in &self.bjts { mark(&[q.c, q.b, q.e]); }
+        for f in &self.fets { mark(&[f.d, f.g, f.s]); }
         let set = |p: &mut Vec<u8>, i: isize, j: isize| { if i >= 0 && j >= 0 { p[i as usize * n + j as usize] = 1; } };
         for o in &self.opamps {
             for j in [o.p, o.n, o.z] { set(&mut p, o.z, j); }
@@ -484,7 +509,7 @@ impl Circuit {
         for _ in 0..max_iter {
             self.a.copy_from_slice(&self.base);
             self.b.copy_from_slice(rhs);
-            stamp_nonlinear(&mut self.a, &mut self.b, n, &self.x, &mut self.diodes, &mut self.bjts, &mut self.opamps, src_scale);
+            stamp_nonlinear(&mut self.a, &mut self.b, n, &self.x, &mut self.diodes, &mut self.bjts, &mut self.opamps, &mut self.fets, src_scale);
             self.x_old.copy_from_slice(&self.x);
             if !self.solve_system() { return false; }
             for i in 0..n { self.x[i] = self.x_old[i] + 1.0 * (self.b[i] - self.x_old[i]); }
@@ -513,6 +538,7 @@ impl Circuit {
         self.x.iter_mut().for_each(|v| *v = 0.0);
         for d in self.diodes.iter_mut() { d.vd = 0.0; }
         for q in self.bjts.iter_mut() { q.vbe = 0.0; q.vbc = 0.0; }
+        for f in self.fets.iter_mut() { f.vgs = 0.0; f.vds = 0.0; }
         for c in self.cmps.iter_mut() { c.held = c.vmid; }
         let mut ok = true;
         let steps = 20;
@@ -644,7 +670,7 @@ impl Circuit {
     }
 
     fn save(&mut self) {
-        let nj = self.diodes.len() + 2 * self.bjts.len() + self.opamps.len();
+        let nj = self.diodes.len() + 2 * self.bjts.len() + self.opamps.len() + 2 * self.fets.len();
         let s = &mut self.saved;
         if s.x.len() != self.n || s.cv.len() != self.caps.len() || s.j.len() != nj {
             *s = Saved { x: vec![0.0; self.n], cv: vec![0.0; self.caps.len()], ci: vec![0.0; self.caps.len()], j: vec![0.0; nj] };
@@ -655,6 +681,7 @@ impl Circuit {
         for d in &self.diodes { s.j[k] = d.vd; k += 1; }
         for q in &self.bjts { s.j[k] = q.vbe; s.j[k + 1] = q.vbc; k += 2; }
         for o in &self.opamps { s.j[k] = o.vzl.unwrap_or(0.0); k += 1; }
+        for f in &self.fets { s.j[k] = f.vgs; s.j[k + 1] = f.vds; k += 2; }
     }
 
     fn restore(&mut self) {
@@ -665,6 +692,7 @@ impl Circuit {
         for d in self.diodes.iter_mut() { d.vd = s.j[k]; k += 1; }
         for q in self.bjts.iter_mut() { q.vbe = s.j[k]; q.vbc = s.j[k + 1]; k += 2; }
         for o in self.opamps.iter_mut() { o.vzl = Some(s.j[k]); k += 1; }
+        for f in self.fets.iter_mut() { f.vgs = s.j[k]; f.vds = s.j[k + 1]; k += 2; }
     }
 }
 
@@ -679,7 +707,7 @@ fn bbd_reset(b: &mut Bbd, vin: f64, cv: f64, fs: f64) {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn stamp_nonlinear(a: &mut [f64], b: &mut [f64], n: usize, x: &[f64], diodes: &mut [Diode], bjts: &mut [Bjt], opamps: &mut [Opamp], src_scale: f64) {
+fn stamp_nonlinear(a: &mut [f64], b: &mut [f64], n: usize, x: &[f64], diodes: &mut [Diode], bjts: &mut [Bjt], opamps: &mut [Opamp], fets: &mut [Fet], src_scale: f64) {
     let v = |i: isize| if i >= 0 { x[i as usize] } else { 0.0 };
     let add = |a: &mut [f64], i: isize, j: isize, val: f64| { if i >= 0 && j >= 0 { a[i as usize * n + j as usize] += val; } };
     let inj = |b: &mut [f64], i: isize, val: f64| { if i >= 0 { b[i as usize] += val; } };
@@ -721,6 +749,21 @@ fn stamp_nonlinear(a: &mut [f64], b: &mut [f64], n: usize, x: &[f64], diodes: &m
         add(a, q.b, q.b, gbbe + gbbc); add(a, q.b, q.e, -gbbe); add(a, q.b, q.c, -gbbc); inj(b, q.b, -kb);
         add(a, q.e, q.b, -(gcbe + gcbc + gbbe + gbbc)); add(a, q.e, q.e, gcbe + gbbe);
         add(a, q.e, q.c, gcbc + gbbc); inj(b, q.e, kc + kb);
+    }
+
+    for f in fets.iter_mut() {
+        let mut vgs = v(f.g) - v(f.s);
+        let mut vds = v(f.d) - v(f.s);
+        if (vgs - f.vgs).abs() > 0.5 { vgs = f.vgs + 0.5 * (vgs - f.vgs).signum(); }
+        if (vds - f.vds).abs() > 2.0 { vds = f.vds + 2.0 * (vds - f.vds).signum(); }
+        f.vgs = vgs; f.vds = vds;
+        // symmetric channel: with vds < 0 the drain and source swap roles
+        let (d, s, vg, vd) = if vds < 0.0 { (f.s, f.d, vgs - vds, -vds) } else { (f.d, f.s, vgs, vds) };
+        let (id, gm, gds) = mosfet_id(f, vg, vd);
+        let g0 = 1e-12;
+        let ieq = id - gm * vg - gds * vd;
+        add(a, d, d, gds + g0); add(a, d, s, -gds - gm - g0); add(a, d, f.g, gm); inj(b, d, -ieq);
+        add(a, s, d, -gds - g0); add(a, s, s, gds + gm + g0); add(a, s, f.g, -gm); inj(b, s, ieq);
     }
 
     for o in opamps.iter_mut() {

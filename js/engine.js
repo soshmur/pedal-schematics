@@ -17,6 +17,7 @@
 //       { id, type: 'VIN', nodes: [p, m],    R },          // audio input, source resistance R
 //       { id, type: 'D',   nodes: [a, k],    model: { Is, n } },
 //       { id, type: 'Q',   nodes: [c, b, e], model: { Is, bf, br, pol } }, // pol +1 NPN, -1 PNP
+//       { id, type: 'M',   nodes: [d, g, s], model: { vth, kp, lambda, Is, n } }, // N-channel MOSFET + body diode
 //       { id, type: 'OA',  nodes: [p, n, o], model: { A, gbw, slew, vmid, vsat } },
 //       { id, type: 'CMP', nodes: [p, n, o], model: { vmid, vsat } },       // op-amp used as a comparator
 //       { id, type: 'BBD', nodes: [in, out, cv], model: { stages, fc, vOct, swing, vbias } },
@@ -37,6 +38,25 @@ export const BJT_MODELS = {
   'Si': { label: 'Silicon NPN', Is: 1.8e-14, br: 4, pol: 1 },
   'Ge': { label: 'Germanium NPN', Is: 2.0e-6, br: 2, pol: 1 },
 };
+
+// N-channel enhancement MOSFETs: square-law channel plus the body diode (source -> drain).
+export const MOSFET_MODELS = {
+  '2N7000': { label: '2N7000', vth: 2.1, kp: 0.1, lambda: 0.02, Is: 1e-12, n: 1.25 },
+  'BS170': { label: 'BS170', vth: 2.0, kp: 0.12, lambda: 0.02, Is: 1e-12, n: 1.25 },
+};
+
+/** Drain current and its derivatives for vds >= 0 (square law, Shichman-Hodges). */
+export function mosfetId(m, vgs, vds) {
+  const vov = vgs - m.vth;
+  if (vov <= 0) return [0, 0, 0];
+  const cl = 1 + m.lambda * vds;
+  if (vds < vov) {
+    const id = m.kp * (vov * vds - vds * vds / 2) * cl;
+    return [id, m.kp * vds * cl, m.kp * (vov - vds) * cl + m.kp * (vov * vds - vds * vds / 2) * m.lambda];
+  }
+  const id = m.kp / 2 * vov * vov * cl;
+  return [id, m.kp * vov * cl, m.kp / 2 * vov * vov * m.lambda];
+}
 
 export const OPAMP_MODELS = {
   'JRC4558': { label: 'JRC4558 (Tube Screamer)', gbw: 3e6, slew: 1e6 },
@@ -299,7 +319,7 @@ export class Circuit {
     let extra = N;
     const prev = keepState ? this : null;
     const oldBbds = keepState ? this.bbds || [] : [], oldCmps = keepState ? this.cmps || [] : [];
-    this.res = []; this.caps = []; this.vsrc = []; this.diodes = []; this.bjts = []; this.opamps = [];
+    this.res = []; this.caps = []; this.vsrc = []; this.diodes = []; this.bjts = []; this.opamps = []; this.fets = [];
     this.bbds = []; this.cmps = [];
     this.input = null;
     for (const e of els) {
@@ -318,6 +338,14 @@ export class Circuit {
           const { Is, bf, br, pol } = e.model;
           this.bjts.push({ c: nd[0], b: nd[1], e: nd[2], Is, bf, br, pol: pol || 1,
             vcrit: VT * Math.log(VT / (Math.SQRT2 * Is)), vbe: 0, vbc: 0 });
+          break;
+        }
+        case 'M': {
+          const { vth = 2, kp = 0.1, lambda = 0.02, Is = 1e-12, n = 1.25 } = e.model || {};
+          this.fets.push({ d: nd[0], g: nd[1], s: nd[2], vth, kp, lambda, vgs: 0, vds: 0 });
+          // body diode: anode at the source (body tied to it), cathode at the drain
+          const vt = n * VT;
+          this.diodes.push({ a: nd[2], k: nd[0], Is, vt, vcrit: vt * Math.log(vt / (Math.SQRT2 * Is)), vd: 0 });
           break;
         }
         case 'OA': {
@@ -367,7 +395,7 @@ export class Circuit {
     this.b = new Float64Array(n);
     this.base = new Float64Array(n * n);
     this.xOld = new Float64Array(n);
-    this.nonlinear = this.diodes.length + this.bjts.length + this.opamps.length > 0;
+    this.nonlinear = this.diodes.length + this.bjts.length + this.opamps.length + this.fets.length > 0;
     this.sparse = null;
     this._oldCaps = this.caps;
     // a value edit can change a delay chip's size: resize its line, keep its output
@@ -461,6 +489,7 @@ export class Circuit {
     for (const c of this.caps) mark([c.a, c.b]);
     for (const d of this.diodes) mark([d.a, d.k]);
     for (const q of this.bjts) mark([q.c, q.b, q.e]);
+    for (const f of this.fets) mark([f.d, f.g, f.s]);
     for (const o of this.opamps) {
       for (const j of [o.p, o.n, o.z]) if (j >= 0) P[o.z * n + j] = 1;
       for (const j of [o.z, o.o]) if (j >= 0) P[o.row * n + j] = 1;
@@ -518,6 +547,23 @@ export class Circuit {
       add(q.e, q.c, gcbc + gbbc); inj(q.e, kc + kb);
     }
 
+    for (const f of this.fets) {
+      // limit how far the gate and drain voltages move per iteration
+      let vgs = V(f.g) - V(f.s), vds = V(f.d) - V(f.s);
+      if (Math.abs(vgs - f.vgs) > 0.5) vgs = f.vgs + 0.5 * Math.sign(vgs - f.vgs);
+      if (Math.abs(vds - f.vds) > 2) vds = f.vds + 2 * Math.sign(vds - f.vds);
+      f.vgs = vgs; f.vds = vds;
+      // the channel is symmetric: with vds < 0 the drain and source swap roles
+      let d = f.d, s = f.s, vg = vgs, vd = vds;
+      if (vds < 0) { d = f.s; s = f.d; vg = vgs - vds; vd = -vds; }
+      const [id, gm, gds] = mosfetId(f, vg, vd);
+      const g0 = 1e-12;
+      const ieq = id - gm * vg - gds * vd;
+      // current id flows from d to s
+      add(d, d, gds + g0); add(d, s, -gds - gm - g0); add(d, f.g, gm); inj(d, -ieq);
+      add(s, d, -gds - g0); add(s, s, gds + gm + g0); add(s, f.g, -gm); inj(s, ieq);
+    }
+
     for (const o of this.opamps) {
       // transconductance into z: i = imax * tanh(gm * vd / imax)
       const vd = V(o.p) - V(o.n);
@@ -565,6 +611,7 @@ export class Circuit {
     this.x.fill(0);
     for (const d of this.diodes) d.vd = 0;
     for (const q of this.bjts) { q.vbe = 0; q.vbc = 0; }
+    for (const f of this.fets) { f.vgs = 0; f.vds = 0; }
     for (const c of this.cmps) c.held = c.vmid;
     let ok = true;
     // source stepping: ramp the supplies up so Newton never has to jump far
@@ -709,7 +756,7 @@ export class Circuit {
   }
 
   _save() {
-    const nj = this.diodes.length + 2 * this.bjts.length + this.opamps.length;
+    const nj = this.diodes.length + 2 * this.bjts.length + this.opamps.length + 2 * this.fets.length;
     if (!this._saved || this._saved.x.length !== this.n || this._saved.cv.length !== this.caps.length || this._saved.j.length !== nj) {
       this._saved = { x: new Float64Array(this.n), cv: new Float64Array(this.caps.length), ci: new Float64Array(this.caps.length), j: new Float64Array(nj) };
     }
@@ -721,6 +768,7 @@ export class Circuit {
     for (const d of this.diodes) s.j[k++] = d.vd;
     for (const q of this.bjts) { s.j[k++] = q.vbe; s.j[k++] = q.vbc; }
     for (const o of this.opamps) s.j[k++] = o.vzl ?? 0;
+    for (const f of this.fets) { s.j[k++] = f.vgs; s.j[k++] = f.vds; }
   }
 
   _restore() {
@@ -731,6 +779,7 @@ export class Circuit {
     for (const d of this.diodes) d.vd = s.j[k++];
     for (const q of this.bjts) { q.vbe = s.j[k++]; q.vbc = s.j[k++]; }
     for (const o of this.opamps) o.vzl = s.j[k++];
+    for (const f of this.fets) { f.vgs = s.j[k++]; f.vds = s.j[k++]; }
   }
 
   /** Process a block of input samples (volts) into output (volts). */
@@ -764,6 +813,13 @@ export class Circuit {
       addG(q.c, q.b, gcbe + gcbc); addG(q.c, q.e, -gcbe); addG(q.c, q.c, -gcbc);
       addG(q.b, q.b, gbbe + gbbc); addG(q.b, q.e, -gbbe); addG(q.b, q.c, -gbbc);
       addG(q.e, q.b, -(gcbe + gcbc + gbbe + gbbc)); addG(q.e, q.e, gcbe + gbbe); addG(q.e, q.c, gcbc + gbbc);
+    }
+    for (const f of this.fets) {
+      let d = f.d, s = f.s, vg = V(f.g) - V(f.s), vd = V(f.d) - V(f.s);
+      if (vd < 0) { d = f.s; s = f.d; vg -= vd; vd = -vd; }
+      const [, gm, gds] = mosfetId(f, vg, vd);
+      addG(d, d, gds); addG(d, s, -gds - gm); addG(d, f.g, gm);
+      addG(s, d, -gds); addG(s, s, gds + gm); addG(s, f.g, -gm);
     }
     for (const o of this.opamps) {
       const ti = Math.tanh(o.gm * (V(o.p) - V(o.n)) / o.imax);

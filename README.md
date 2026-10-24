@@ -6,13 +6,14 @@ a real circuit simulation running in your browser.
 
 **Live:** https://soshmur.github.io/pedal-schematics/
 
-Seven circuits to start from:
+Eight circuits to start from:
 
 | Pedal | Based on | Try changing |
 |---|---|---|
 | Booster | EHX LPB-1 | R4 (emitter resistor) sets the gain; C1 sets the bass |
 | Fuzz Face | Dallas Arbiter Fuzz Face | hFE, germanium vs silicon, the Bias trimmer |
 | Electra | Electra / Mike Matthews one-transistor distortion | R2 for gain, D1/D2 Schottky vs silicon |
+| OCD | Fulltone OCD | Drive, R4/C4 for the bass cut, D1 (remove it for symmetric clipping), the 2N7000s |
 | Screamer | Ibanez TS808 clipping stage | D1/D2 → LEDs or germanium; R3/C2 move the mid hump |
 | Rodent | ProCo RAT | the op-amp chip (slew rate!), R2/R3 gain legs, clipping diodes |
 | Analog Delay | Boss DM-2 | the BBD chip (1024–4096 stages), its clock, R5 for runaway repeats |
@@ -138,7 +139,7 @@ Add an entry to `PEDALS` in `js/pedals.js`:
 }
 ```
 
-Part types: `R`, `C` (`polar: true` for electrolytics), `D`, `Q` (NPN),
+Part types: `R`, `C` (`polar: true` for electrolytics), `D`, `Q` (NPN), `M` (N-channel MOSFET: drain, gate, source),
 `OA` (op-amp; `comparator: true` for a Schmitt trigger), `BBD` (`chip`,
 `value` = clock at 4.5 V, `vOct`), `POT` (`knob: 'Name'` puts it on the enclosure, `trim: true`
 keeps it on the board), plus `IN`, `OUT`, `GND`, `VCC` (+9 V) and `VREF`

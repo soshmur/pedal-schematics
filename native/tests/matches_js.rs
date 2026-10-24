@@ -18,7 +18,7 @@ struct Fixture {
     out2: Vec<f64>,
 }
 
-const PEDALS: [&str; 7] = ["booster", "fuzz", "electra", "screamer", "rodent", "echo", "chorus"];
+const PEDALS: [&str; 8] = ["booster", "fuzz", "electra", "ocd", "screamer", "rodent", "echo", "chorus"];
 
 fn rms(v: &[f64]) -> f64 { (v.iter().map(|x| x * x).sum::<f64>() / v.len() as f64).sqrt() }
 

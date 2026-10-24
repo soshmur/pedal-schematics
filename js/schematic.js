@@ -11,7 +11,7 @@
 //   - a pin or wire end landing anywhere on a wire segment connects (T-junction)
 //   - two wires crossing mid-segment do NOT connect
 
-import { DIODE_MODELS, BJT_MODELS, OPAMP_MODELS, BBD_MODELS } from './engine.js';
+import { DIODE_MODELS, BJT_MODELS, OPAMP_MODELS, BBD_MODELS, MOSFET_MODELS } from './engine.js';
 
 export const GRID = 20;
 
@@ -23,6 +23,7 @@ const PINS = {
   POT: [[0, 0], [4, 0], [2, -2]], // end 0, end 1, wiper
   OA: [[0, 0], [0, 2], [4, 1]], // inverting, non-inverting, output
   Q: [[2, -2], [0, 0], [2, 2]], // collector, base, emitter
+  M: [[2, -2], [0, 0], [2, 2]], // drain, gate, source (N-channel MOSFET)
   BBD: [[0, 0], [6, 0], [3, 3]], // audio in, audio out, clock CV
   GND: [[0, 0]], VCC: [[0, 0]], VREF: [[0, 0]], IN: [[0, 0]], OUT: [[0, 0]],
 };
@@ -203,6 +204,11 @@ export function buildNetlist(def, state = {}) {
         elements.push({ id: part.id, type: 'Q', nodes: n, model: { ...BJT_MODELS[m], bf: hfe[part.id] ?? part.hfe } });
         break;
       }
+      case 'M': {
+        const m = models[part.id] ?? part.model;
+        elements.push({ id: part.id, type: 'M', nodes: n, model: MOSFET_MODELS[m] });
+        break;
+      }
       case 'BBD': {
         const chip = BBD_MODELS[models[part.id] ?? part.chip];
         elements.push({ id: part.id, type: 'BBD', nodes: n,
@@ -272,6 +278,14 @@ export function toSpice(def, net) {
         const m = `Q_${id}`;
         models.add(`.model ${m} ${e.model.pol < 0 ? 'PNP' : 'NPN'}(Is=${e.model.Is} Bf=${e.model.bf} Br=${e.model.br})`);
         lines.push(`Q${id.replace(/^Q/, '')} ${nodes} ${m}`);
+        break;
+      }
+      case 'M': {
+        const m = `M_${e.model.label}`;
+        models.add(`.model ${m} NMOS(Level=1 Vto=${e.model.vth} Kp=${e.model.kp} Lambda=${e.model.lambda})`);
+        models.add(`.model D_${e.model.label}_body D(Is=${e.model.Is} N=${e.model.n})`);
+        const [d, g, src] = e.nodes.map(nm);
+        lines.push(`M${id.replace(/^[MQ]/, '')} ${d} ${g} ${src} ${src} ${m}`, `D${id}body ${src} ${d} D_${e.model.label}_body`);
         break;
       }
       case 'OA': {
@@ -374,6 +388,14 @@ function symbol(part, state) {
         `<path class="body" d="M${0.95 * g} 6L${2 * g} ${1.2 * g}V${2 * g}"/>` +
         `<path class="fill" d="M${1.75 * g} ${1.2 * g - 1}l-11 -1l5 -8Z"/>`;
     }
+    case 'M': {
+      // N-channel enhancement MOSFET: gate plate, broken channel, arrow into the channel, body to source
+      const x0 = 0.95 * g, x1 = 1.25 * g, x2 = 2 * g;
+      return `<path class="body" d="M0 0H${x0}M${x0} -13V13"/>` +
+        `<path class="body" d="M${x1} -15V-7M${x1} -4V4M${x1} 7V15"/>` +
+        `<path class="body" d="M${x1} -11H${x2}V-${2 * g}M${x1} 11H${x2}V${2 * g}M${x1} 0H${x2}V11"/>` +
+        `<path class="fill" d="M${x1 + 1} 0l8 -4v8Z"/>`;
+    }
     default: return '';
   }
 }
@@ -410,7 +432,7 @@ function labelPos(part) {
     const [, , out] = pins;
     return { x: (out[0] - 2) * g, y: out[1] * g + 2.5 * g, anchor: 'middle', stack: true };
   }
-  if (part.type === 'Q') {
+  if (part.type === 'Q' || part.type === 'M') {
     const [, b] = pins;
     return { x: b[0] * g + 2.6 * g, y: b[1] * g, anchor: 'start', stack: true };
   }
@@ -445,6 +467,7 @@ export function valueText(part, state, formatSI) {
     case 'C': return formatSI(values[part.id] ?? part.value) + 'F';
     case 'D': { const m = models[part.id] ?? part.model; return m === 'none' ? 'removed' : m; }
     case 'Q': return `${models[part.id] ?? part.model} hFE ${(state.hfe || {})[part.id] ?? part.hfe}`;
+    case 'M': return models[part.id] ?? part.model;
     case 'OA': return part.comparator ? 'comparator' : models[part.id] ?? part.chip ?? 'op-amp';
     case 'BBD': return `${models[part.id] ?? part.chip}, clock ${formatSI(values[part.id] ?? part.value)}Hz`;
     default: return '';

@@ -67,6 +67,27 @@ test('Electra: collector-feedback bias, then diodes clamp the output', () => {
   assert.ok(peak > 0.15 && peak < 0.45, 'clipped peak ' + peak);
 });
 
+test('OCD: MOSFET + germanium clipping is asymmetric, gain tracks the Drive knob', () => {
+  const def = pedalByKey('ocd');
+  const lo = new Circuit(buildNetlist(def, { knobs: { VR1: 0, VR3: 1 } }), FS).acSweep([1000]).mag[0];
+  const hi = new Circuit(buildNetlist(def, { knobs: { VR1: 1, VR3: 1 } }), FS).acSweep([1000]).mag[0];
+  assert.ok(hi - lo > 20, `drive range ${lo.toFixed(1)} -> ${hi.toFixed(1)} dB`);
+  // at the app's 2x oversampled rate (a sharp clipping edge overshoots for a sample at 1x)
+  const fs = 2 * FS;
+  const net = buildNetlist(def, { knobs: { VR1: 1, VR3: 1 } });
+  const c = new Circuit(net, fs);
+  const clip = net.pinNodes.R7[1];
+  const vb = c.nodeVoltage(clip);
+  let top = -9, bot = 9;
+  for (let i = 0; i < fs / 2; i++) {
+    c.step(0.3 * Math.sin(2 * Math.PI * 220 * i / fs));
+    if (i > fs / 4) { const v = c.nodeVoltage(clip) - vb; top = Math.max(top, v); bot = Math.min(bot, v); }
+  }
+  // bottom: Q1 body diode (~0.6 V); top: 1N34 + Q2 body diode (~0.9-1 V)
+  assert.ok(bot < -0.5 && bot > -0.85, 'bottom ' + bot);
+  assert.ok(top > 0.8 && top < 1.2, 'top ' + top);
+});
+
 test('Fuzz Face: Q2 collector sits mid-supply-ish', () => {
   const def = pedalByKey('fuzz');
   const net = buildNetlist(def);
