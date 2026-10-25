@@ -88,7 +88,7 @@ struct Bjt { c: isize, b: isize, e: isize, is: f64, bf: f64, br: f64, pol: f64, 
 #[derive(Clone)]
 struct Fet { d: isize, g: isize, s: isize, vth: f64, kp: f64, lambda: f64, vgs: f64, vds: f64 }
 #[derive(Clone)]
-struct Opamp { p: isize, n: isize, o: isize, z: isize, gm: f64, imax: f64, vmid: f64, vsat: f64, row: isize, vzl: Option<f64> }
+struct Opamp { p: isize, n: isize, o: isize, z: isize, gm: f64, imax: f64, clamp_g: f64, vmid: f64, vsat: f64, row: isize, vzl: Option<f64> }
 #[derive(Clone)]
 struct Cmp { p: isize, n: isize, o: isize, vmid: f64, vsat: f64, row: isize, held: f64 }
 #[derive(Clone)]
@@ -100,13 +100,13 @@ fn safe_exp(x: f64) -> f64 {
     if x > MAX_EXP { MAX_EXP.exp() * (1.0 + x - MAX_EXP) } else { x.exp() }
 }
 
-fn rail_clamp(v: f64, lim: f64) -> (f64, f64) {
+fn rail_clamp(v: f64, lim: f64, clamp_g: f64) -> (f64, f64) {
     let sp = |u: f64| if u > 30.0 { u } else { u.exp().ln_1p() };
     let sg = |u: f64| 1.0 / (1.0 + (-u).exp());
     let a = CLAMP_K * (v - lim);
     let b = -CLAMP_K * (v + lim);
-    let i = CLAMP_G * (sp(a) - sp(b)) / CLAMP_K;
-    let g = CLAMP_G * (sg(a) + sg(b)) + 1e-12;
+    let i = clamp_g * (sp(a) - sp(b)) / CLAMP_K;
+    let g = clamp_g * (sg(a) + sg(b)) + 1e-12;
     (i, g)
 }
 
@@ -365,7 +365,7 @@ impl Circuit {
                     let cz = a / (2.0 * std::f64::consts::PI * gbw);
                     self.caps.push(Cap { a: z, b: -1, c: cz, v: 0.0, i: 0.0, geq: 0.0, be: true });
                     self.opamps.push(Opamp {
-                        p: node(0)?, n: node(1)?, o: node(2)?, z, gm: a, imax: slew * cz,
+                        p: node(0)?, n: node(1)?, o: node(2)?, z, gm: a, imax: slew * cz, clamp_g: CLAMP_G.max(20.0 * slew * cz),
                         vmid: num(&e.model, "vmid", 4.5), vsat: num(&e.model, "vsat", 3.5), row: extra, vzl: None,
                     });
                     extra += 1;
@@ -777,7 +777,7 @@ fn stamp_nonlinear(a: &mut [f64], b: &mut [f64], n: usize, x: &[f64], diodes: &m
             if (vz - l).abs() > 1.0 { vz = l + (vz - l).signum(); }
         }
         o.vzl = Some(vz);
-        let (ic, gc) = rail_clamp(vz, o.vsat);
+        let (ic, gc) = rail_clamp(vz, o.vsat, o.clamp_g);
         add(a, o.z, o.z, gc);
         b[o.z as usize] -= ic - gc * vz;
         add(a, o.row, o.z, -1.0);

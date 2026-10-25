@@ -91,12 +91,12 @@ function safeExp(x) {
 // Current and conductance of the op-amp rail clamp at internal voltage v:
 // G * (softplus(k(v - lim)) - softplus(-k(v + lim))) / k
 const CLAMP_G = 1e3, CLAMP_K = 8;
-function railClamp(v, lim) {
+function railClamp(v, lim, G = CLAMP_G) {
   const sp = (u) => (u > 30 ? u : Math.log1p(Math.exp(u)));
   const sg = (u) => 1 / (1 + Math.exp(-u));
   const a = CLAMP_K * (v - lim), b = -CLAMP_K * (v + lim);
-  const i = CLAMP_G * (sp(a) - sp(b)) / CLAMP_K;
-  const g = CLAMP_G * (sg(a) + sg(b)) + 1e-12;
+  const i = G * (sp(a) - sp(b)) / CLAMP_K;
+  const g = G * (sg(a) + sg(b)) + 1e-12;
   return [i, g];
 }
 
@@ -357,7 +357,8 @@ export class Circuit {
           const z = extra++;
           const Cz = A / (2 * Math.PI * gbw); // with a 1 ohm load on z
           this.caps.push({ a: z, b: -1, C: Cz, v: 0, i: 0, be: true });
-          this.opamps.push({ p: nd[0], n: nd[1], o: nd[2], z, gm: A, imax: slew * Cz, vmid, vsat, row: extra++ });
+          // the rail clamp must out-pull the slew current, or a fast chip driven hard swings past its rails
+          this.opamps.push({ p: nd[0], n: nd[1], o: nd[2], z, gm: A, imax: slew * Cz, clampG: Math.max(CLAMP_G, 20 * slew * Cz), vmid, vsat, row: extra++ });
           break;
         }
         case 'CMP': {
@@ -576,7 +577,7 @@ export class Circuit {
       let vz = x[o.z];
       if (o.vzl !== undefined && Math.abs(vz - o.vzl) > 1) vz = o.vzl + Math.sign(vz - o.vzl);
       o.vzl = vz;
-      const [ic, gc] = railClamp(vz, o.vsat);
+      const [ic, gc] = railClamp(vz, o.vsat, o.clampG);
       add(o.z, o.z, gc);
       b[o.z] -= ic - gc * vz;
       // output: vo = vmid + vz
@@ -825,7 +826,7 @@ export class Circuit {
       const ti = Math.tanh(o.gm * (V(o.p) - V(o.n)) / o.imax);
       const gi = o.gm * (1 - ti * ti) + 1e-9;
       addG(o.z, o.p, -gi); addG(o.z, o.n, gi);
-      addG(o.z, o.z, railClamp(x[o.z], o.vsat)[1]);
+      addG(o.z, o.z, railClamp(x[o.z], o.vsat, o.clampG)[1]);
       addG(o.row, o.z, -1);
     }
     const mag = new Float64Array(freqs.length), phase = new Float64Array(freqs.length);

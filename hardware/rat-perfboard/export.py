@@ -21,23 +21,21 @@ NETINFO = {
  'GND':'ground', 'V9':'+9 V after D3', 'VF':'filtered +9 V (op-amp and Q1 supply)', 'VB':'4.5 V bias', 'VIN':'+9 V from the DC jack, before D3',
  'IN':'input', 'A':'C1 → R2/R3', 'P3':'op-amp pin 3 (+)', 'P2':'op-amp pin 2 (−)', 'P1':'op-amp pin 1 (out)',
  'g1':'R4 → C5', 'g2':'R5 → C6', 'K':'C7 → R6', 'D':'clipping diodes', 'FL':'R7 → Filter pot', 'F':'filter node (C8, C9)',
- 'G':'Q1 base', 'E':'Q1 emitter (output)', 'VH':'C10 → Volume pot', 'P7':'unused op-amp half (pins 6 and 7 joined)',
+ 'VC':'diode reference (bias filtered by R16 + C16)', 'VH':'C10 → Volume pot', 'P7':'op-amp half B output (buffer, pins 6 and 7 joined)',
 }
 JOB = {
- 'R1':('Input pulldown, stops the pop when you switch on','Pulldown'), 'R2':('Biases the op-amp input at 4.5 V','Input bias'),
+ 'R2':('Biases the op-amp input at 4.5 V (the one 1M)','Input bias'),
  'R3':('Input series resistor','Input'), 'R4':('Gain leg with C5: sets the top of the gain','Gain leg'),
  'R5':('Gain leg with C6: sets how much bass gets amplified','Gain leg'), 'R6':('Limits current into the clipping diodes','To diodes'),
- 'R7':('Filter: brightest setting (1.5k in the original)','Filter'), 'R8':('Biases the output transistor','Buffer bias'),
- 'R9':('Output transistor emitter load','Buffer'), 'R10':('Supply filter resistor','Supply filter'),
- 'R11':('Top half of the 4.5 V divider','Bias divider'), 'R12':('Bottom half of the 4.5 V divider','Bias divider'),
+ 'R7':('Filter: brightest setting (1.5k in the original)','Filter'), 'R16':('Filters the diode reference so clipping can\'t shake the bias','Diode ref'), 'R10':('Supply filter resistor','Supply filter'),
+ 'R11':('Top half of the 4.5 V divider (100k in the original)','Bias divider'), 'R12':('Bottom half of the 4.5 V divider (100k in the original)','Bias divider'),
  'C1':('Input coupling cap','Input cap'), 'C2':('Removes radio-frequency hiss at the input','RF filter'),
  'C4':('Treble limit across the Distortion pot: two 220p in series (100p in the original)','Feedback cap'),
- 'C8':('Filter capacitor','Filter'), 'C9':('Couples the filter into the output transistor','Coupling'), 'C12':('Supply decoupling','Supply filter'),
- 'C5':('Gain leg cap, + toward R4','Gain leg'), 'C6':('Gain leg cap, + toward R5','Gain leg'), 'C7':('Couples the op-amp to the diodes, + toward the op-amp','Coupling'),
- 'C10':('Output coupling, + toward Q1','Output cap'), 'C11':('Supply filter','Supply filter'), 'C13':('Smooths the 4.5 V bias','Bias filter'),
- 'D1':('Clipping diode to ground','Clipping'), 'D2':('Clipping diode, the other way round','Clipping'), 'D3':('Reverse-polarity protection','Protection'),
- 'Q1':('Output buffer (emitter follower), in place of the original 2N5458 JFET','Output buffer'),
- 'U1':('Dual op-amp: half A is the RAT gain stage, half B is parked (pin 5 to bias, pins 6–7 joined)','Op-amp'),
+ 'C8':('Filter capacitor','Filter'), 'C16':('Diode reference cap, + toward R16','Diode ref'), 'C12':('Supply decoupling','Supply filter'),
+ 'C5':('Gain leg cap, + toward R4','Gain leg'), 'C6':('Gain leg cap, + toward R5','Gain leg'),
+ 'C10':('Output coupling, + toward the op-amp','Output cap'), 'C11':('Supply filter','Supply filter'), 'C13':('Smooths the 4.5 V bias','Bias filter'),
+ 'D1':('Clipping diode to the diode reference','Clipping'), 'D2':('Clipping diode, the other way round','Clipping'), 'D3':('Reverse-polarity protection','Protection'),
+ 'U1':('Dual op-amp: half A is the RAT gain stage, half B is the output buffer (in place of the JFET)','Op-amp'),
 }
 KIND = {'R':'Resistor','C':'Film capacitor','E':'Electrolytic capacitor','D':'Diode','Q':'NPN transistor'}
 TIP = {

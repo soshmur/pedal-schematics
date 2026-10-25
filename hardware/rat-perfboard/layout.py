@@ -6,38 +6,38 @@ LEN = {'R':6,'C':4,'E':2,'D':4,'Q':3}
 # film caps 'C', electrolytic 'E' (pin1 = +), diode 'D' (pin1 = anode, pin2 = cathode)
 # transistor 'Q' 2SC1815 pins in hole order E, C, B
 PARTS = {
- # ProCo RAT on a dual op-amp (half B parked as a follower) with a C1815 output buffer.
- # 'Q' parts list nets in hole order (C1815: E, C, B).
- 'R1': ('R','1M',   ['IN','GND']),       # input pulldown
- 'R2': ('R','1M',   ['A','VB']),         # biases the + input
+ # ProCo RAT using only resistors of 1k and below plus one 1M.
+ # Half A of the dual op-amp is the RAT gain stage; half B is the output buffer. The clipping
+ # diodes go to the 4.5 V bias, so the filter output sits at 4.5 V and feeds half B directly.
+ # The diodes return to their own filtered reference (VC = bias via R16 + C16), so the clipped
+ # current can't shake the bias that also feeds the op-amp input (that loop can latch up).
+ # The input pulldown is left out: the 3PDT grounds the board input in bypass.
+ 'R2': ('R','1M',   ['A','VB']),         # biases the + input (the one 1M)
  'R3': ('R','1k',   ['A','P3']),
  'R4': ('R','47',   ['P2','g1']),        # gain leg 1 (with C5)
  'R5': ('R','560',  ['P2','g2']),        # gain leg 2 (with C6)
- 'R6': ('R','1k',   ['K','D']),          # into the clipping diodes
+ 'R6': ('R','1k',   ['P1','D']),         # into the clipping diodes
  'R7': ('R','1k',   ['D','FL']),         # 1.5k in the original
- 'R8': ('R','1M',   ['G','VB']),         # buffer bias
- 'R9': ('R','10k',  ['E','GND']),        # buffer emitter load
  'R10':('R','47',   ['V9','VF']),        # supply filter
- 'R11':('R','100k', ['VF','VB']),
- 'R12':('R','100k', ['VB','GND']),
+ 'R11':('R','1k',   ['VF','VB']),        # 4.5 V divider (100k in the original)
+ 'R12':('R','1k',   ['VB','GND']),
  'C1': ('C','22n',  ['IN','A']),
  'C2': ('C','1n',   ['P3','GND']),
  'C4': ('C','100p', ['P2','P1']),        # two 220p in series
  'C8': ('C','3.3n', ['F','GND']),
- 'C9': ('C','22n',  ['F','G']),
  'C12':('C','100n', ['VF','GND']),
  'C5': ('E','2.2µ', ['g1','GND']),       # + toward R4
  'C6': ('E','4.7µ', ['g2','GND']),       # + toward R5
- 'C7': ('E','4.7µ', ['P1','K']),         # + toward the op-amp
- 'C10':('E','1µ',   ['E','VH']),         # + toward Q1
+ 'C10':('E','1µ',   ['P7','VH']),        # + toward the op-amp
  'C11':('E','100µ', ['VF','GND']),
- 'C13':('E','1µ',   ['VB','GND']),
- 'D1': ('D','1N4148',['D','GND']),
- 'D2': ('D','1N4148',['GND','D']),
+ 'C13':('E','47µ',  ['VB','GND']),
+ 'D1': ('D','1N4148',['D','VC']),
+ 'D2': ('D','1N4148',['VC','D']),
+ 'R16':('R','1k',   ['VB','VC']),        # diode reference filter
+ 'C16':('E','100µ', ['VC','GND']),       # + toward R16 (47µ is fine too)
  'D3': ('D','1N5817',['VIN','V9']),
- 'Q1': ('Q','C1815',['E','VF','G']),     # emitter follower
 }
-U1 = {1:'P1',2:'P2',3:'P3',4:'GND',5:'VB',6:'P7',7:'P7',8:'VF'}   # half B: + to bias, - tied to its output
+U1 = {1:'P1',2:'P2',3:'P3',4:'GND',5:'F',6:'P7',7:'P7',8:'VF'}   # half B: unity buffer from the filter
 PADS = {  # off-board wire pads: id -> (net, label)
  'IN':('IN','Input'), '9V':('VIN','+9V'), 'G':('GND','Ground'),
  'DS1':('P2','Distortion lug 1'), 'DS2':('P1','Distortion lugs 2+3'),

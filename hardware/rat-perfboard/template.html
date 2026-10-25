@@ -77,9 +77,9 @@ ol.steps { padding-left: 20px; margin: 0; display: grid; gap: 8px; max-width: 75
 <div class="wrap">
 <header>
   <h1>RAT Perfboard Layout</h1>
-  <p>ProCo RAT distortion on an 18 × 24 hole perfboard, built for the dual op-amp you already have (TL072 or JRC4558) with a C1815 output buffer in place of the original JFET. Values are swapped to ones in your kits where needed. Click any part to see what it connects to.</p>
+  <p>ProCo RAT distortion on an 18 × 24 hole perfboard using only resistors of 1k and below plus a single 1M. The second half of your dual op-amp (TL072 or JRC4558) is the output buffer, in place of the original JFET. Click any part to see what it connects to.</p>
   <div class="spec">
-    <span>18 × 24 holes</span><span>resistor 6 holes</span><span>film cap 4</span><span>electrolytic 2</span><span>diode 4</span><span>transistor 3</span><span>DIP-8 socket</span>
+    <span>18 × 24 holes</span><span>resistor 6 holes</span><span>film cap 4</span><span>electrolytic 2</span><span>diode 4</span><span>DIP-8 socket</span>
   </div>
 </header>
 
@@ -150,11 +150,11 @@ ol.steps { padding-left: 20px; margin: 0; display: grid; gap: 8px; max-width: 75
     <li>Fit the <b>wire links on the back</b> first, while the board is empty. Use insulated wire for every dashed link: each one crosses other connections.</li>
     <li><b>Diodes</b> (stripe = cathode, match the band on the drawing), then <b>resistors</b>.</li>
     <li>The <b>DIP-8 socket</b> with its notch at the end shown. Don't solder the chip itself.</li>
-    <li><b>Film caps</b>. For <b>C4</b>, twist two 220p caps end to end (series = 110p) and fit the outer legs. Then the <b>C1815</b> (flat face as drawn), then the <b>electrolytics</b> (+ leg on the hole marked +).</li>
+    <li><b>Film caps</b>. For <b>C4</b>, twist two 220p caps end to end (series = 110p) and fit the outer legs. Then the <b>electrolytics</b> (+ leg on the hole marked +).</li>
     <li>Off-board wires to the pots, jacks, DC socket and footswitch, following the wiring diagram.</li>
-    <li>Before fitting the chip, power up and check: socket pin 8 ≈ 8.7 V, pins 3 and 5 about half that. Then fit the op-amp and check pins 1, 2, 3, 6, 7 all sit near half the supply, and Q1's E about 2.5–3 V.</li>
+    <li>Before fitting the chip, power up and check: socket pin 8 ≈ 8.5 V and the R11/R12 junction about half that. Then fit the op-amp and check pins 1, 2, 3, 5, 6, 7 all sit near half the supply.</li>
   </ol>
-  <p class="note">Electrolytics you'll need: 2.2 µF, 2 × 4.7 µF, 2 × 1 µF, 100 µF. If your kit has no 2.2 µF, two 1 µF in parallel works; 10 µF is fine in place of 4.7 µF.</p>
+  <p class="note">Resistors: only 47, 560, 1k and one 1M. Electrolytics: 2.2 µF, 4.7 µF, 1 µF, 47 µF and 2 × 100 µF (C16 can be 47 µF). No 2.2 µF? Two 1 µF in parallel. 10 µF is fine in place of 4.7 µF. The 4.5 V divider is 1k + 1k, so the pedal draws about 8 mA: fine on an adapter, but a 9 V battery won't last long.</p>
 </section>
 </div>
 
@@ -368,12 +368,6 @@ function tables() {
 }
 function pinouts() {
   document.getElementById('pinouts').innerHTML = `
-  <svg viewBox="0 0 120 92" width="150" role="img" aria-label="2SC1815 pinout, flat face toward you: E C B">
-    <path d="M20 46 A40 40 0 0 1 100 46 L100 52 L20 52 Z" fill="var(--body-q)"/>
-    <text x="60" y="40" font-size="10" fill="#eee" text-anchor="middle">C1815</text>
-    ${['E','C','B'].map((s,i)=>`<line x1="${36+i*24}" y1="52" x2="${36+i*24}" y2="74" stroke="#999" stroke-width="3"/><text x="${36+i*24}" y="88" font-size="12" font-weight="600" fill="var(--ink)" text-anchor="middle">${s}</text>`).join('')}
-  </svg>
-  <div class="hint" style="max-width:24ch">2SC1815, flat face toward you, legs down: <b>E C B</b>. The drawing marks E, C and B on its holes.</div>
   <svg viewBox="0 0 120 110" width="140" role="img" aria-label="DIP-8 op-amp pinout">
     <rect x="34" y="10" width="52" height="88" rx="3" fill="var(--body-u)"/>
     <path d="M52 10 A8 8 0 0 0 68 10" fill="var(--panel)"/>
